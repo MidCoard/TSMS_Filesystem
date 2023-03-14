@@ -6,6 +6,7 @@
 #include "tsms_string.h"
 #include "tsms_long_list.h"
 #include "tsms_long_map.h"
+#include "tsms_util.h"
 #include <unistd.h>
 
 #define TSMS_FILE_NAME_MAX_LENGTH 255
@@ -76,13 +77,13 @@ bool TSMS_FILESYSTEM_isFolder(pFile file);
 
 pFile TSMS_FILESYSTEM_getFile(pFile file, pString name);
 
-pString TSMS_FILESYSTEM_readFile(pFile file);
+uint8_t *TSMS_FILESYSTEM_readFile(pFile file);
 
-pString TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end);
+uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end);
 
-TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, pString content);
+TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE size);
 
-TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos);
+TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE size, TSMS_POS pos);
 
 TSMS_RESULT TSMS_FILESYSTEM_emptyFile(pFile file);
 

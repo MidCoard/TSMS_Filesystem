@@ -10,9 +10,11 @@ pString TSMS_STRING_CURRENT;
 
 pString TSMS_STRING_PARENT;
 
-char filenameBuffer[256];
+uint8_t filenameBuffer[256];
 
-char contentBuffer[TSMS_FILE_CONTENT_BLOCK + 1];
+uint8_t contentBuffer[TSMS_FILE_CONTENT_BLOCK];
+
+uint8_t emptyBuffer[0];
 
 TSMS_INLINE bool __internal_tsms_check_file_name(pFilesystem fs, pString name) {
 	if (name->length > TSMS_FILE_NAME_MAX_LENGTH)
@@ -148,7 +150,7 @@ TSMS_INLINE pFile __internal_tsms_read_file(pFilesystem filesystem, long offset,
 	TSMS_SIZE length = 0;
 	int c;
 	while(length < TSMS_FILE_NAME_MAX_LENGTH && (c = fgetc(filesystem->__native_file)) != 0)
-		filenameBuffer[length++] = (char) c;
+		filenameBuffer[length++] = c;
 	if (c != 0)
 		return TSMS_NULL;
 	filenameBuffer[length] = 0;
@@ -389,28 +391,28 @@ pFile TSMS_FILESYSTEM_getFile(pFile file, pString name) {
 	return TSMS_NULL;
 }
 
-pString TSMS_FILESYSTEM_readFile(pFile file) {
+uint8_t *TSMS_FILESYSTEM_readFile(pFile file) {
 	if (TSMS_FILESYSTEM_isFolder(file))
 		return TSMS_NULL;
 #ifdef TSMS_STM32
 	return TSMS_NULL;
 #else
-	pString content = TSMS_STRING_empty();
 	TSMS_LSIZE size = file->size;
+	uint8_t * buffer = TSMS_NULL;
+	TSMS_LSIZE bufferLength = 0;
 	for (TSMS_POS i = 0; i< file->blocks->length; i++) {
 		TSMS_SIZE block = min(size, TSMS_FILE_CONTENT_BLOCK);
 		fseek(file->filesystem->__native_file, file->blocks->list[i], SEEK_SET);
 		fread(contentBuffer, block, 1, file->filesystem->__native_file);
-		contentBuffer[block] = '\0';
-		tString t = TSMS_STRING_temp(contentBuffer);
-		TSMS_STRING_append(content, &t);
+		buffer = TSMS_UTIL_streamAppend(buffer, bufferLength, contentBuffer, block);
 		size -= block;
+		bufferLength += block;
 	}
-	return content;
+	return buffer;
 #endif
 }
 
-pString TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end) {
+uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end) {
 	if (file == TSMS_NULL)
 		return TSMS_NULL;
 	if (TSMS_FILESYSTEM_isFolder(file))
@@ -426,44 +428,45 @@ pString TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end
 #else
 	TSMS_LSIZE size = end - start;
 	if (size == 0)
-		return TSMS_STRING_empty();
+		return emptyBuffer;
 	TSMS_POS pos = start / TSMS_FILE_CONTENT_BLOCK;
 	if (size <= (TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK))) {
 		fseek(file->filesystem->__native_file, file->blocks->list[pos] + (start % TSMS_FILE_CONTENT_BLOCK), SEEK_SET);
 		fread(contentBuffer, size, 1, file->filesystem->__native_file);
-		contentBuffer[size] = '\0';
-		return TSMS_STRING_createAndInit(contentBuffer);
+		uint8_t* buffer = TSMS_NULL;
+		buffer = TSMS_UTIL_streamAppend(buffer, 0, contentBuffer, size);
+		return buffer;
 	}
 	fseek(file->filesystem->__native_file, file->blocks->list[pos] + (start % TSMS_FILE_CONTENT_BLOCK), SEEK_SET);
 	fread(contentBuffer, TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK), 1, file->filesystem->__native_file);
-	contentBuffer[TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK)] = '\0';
-	pString content = TSMS_STRING_createAndInit(contentBuffer);
+	uint8_t * buffer = TSMS_NULL;
+	TSMS_LSIZE bufferLength = TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK);
+	TSMS_UTIL_streamAppend(buffer, 0, contentBuffer, TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK));
 	size -= TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK);
 	for (TSMS_POS i = pos + 1; i < file->blocks->length; i++) {
 		TSMS_SIZE block = min(size, TSMS_FILE_CONTENT_BLOCK);
 		fseek(file->filesystem->__native_file, file->blocks->list[i], SEEK_SET);
 		fread(contentBuffer, block, 1, file->filesystem->__native_file);
-		contentBuffer[block] = '\0';
-		tString t = TSMS_STRING_temp(contentBuffer);
-		TSMS_STRING_append(content, &t);
+		buffer = TSMS_UTIL_streamAppend(buffer, bufferLength, contentBuffer, block);
 		size -= block;
+		bufferLength += block;
 		if (size == 0)
 			break;
 	}
-	return content;
+	return buffer;
 #endif
 }
 
-TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, pString content) {
+TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE size) {
 	if (file == TSMS_NULL || content == TSMS_NULL)
 		return TSMS_ERROR;
 	if (TSMS_FILESYSTEM_emptyFile(file) != TSMS_SUCCESS)
 		return TSMS_ERROR;
-	return TSMS_FILESYSTEM_insertFile(file, content, 0);
+	return TSMS_FILESYSTEM_insertFile(file, content,  size,0);
 }
 
 
-TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos) {
+TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE ssize, TSMS_POS pos) {
 	if (file == TSMS_NULL || content == TSMS_NULL)
 		return TSMS_ERROR;
 	if (TSMS_FILESYSTEM_isFolder(file))
@@ -474,51 +477,54 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos
 	return TSMS_FAIL;
 #else
 	if (pos % TSMS_FILE_CONTENT_BLOCK == 0) {
-		TSMS_SIZE length = content->length;
-		pString rest;
+		TSMS_SIZE length = ssize;
+		uint8_t *rest;
 		if (length % TSMS_FILE_CONTENT_BLOCK == 0)
-			rest = TSMS_STRING_empty();
-		else
+			rest = TSMS_NULL;
+		else {
 			rest = TSMS_FILESYSTEM_readPartialFile(file, pos, file->size);
-		if (rest == TSMS_NULL)
-			return TSMS_ERROR;
+			if (rest == TSMS_NULL)
+				return TSMS_ERROR;
+		}
 		TSMS_POS blockPos = pos / TSMS_FILE_CONTENT_BLOCK;
 		TSMS_SIZE size = length / TSMS_FILE_CONTENT_BLOCK;
 		for (TSMS_POS i = 0; i < size; i++) {
 			long offset = __internal_tsms_alloc_content_block(file->filesystem);
 			if (TSMS_LONG_LIST_insert(file->blocks, offset , blockPos + i) != TSMS_SUCCESS) {
-				file->size += content->length - length;
+				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
 				return TSMS_ERROR;
 			}
-			strncpy(contentBuffer, content->cStr + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
+			memcpy(contentBuffer, content + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
 			fseek(file->filesystem->__native_file, offset, SEEK_SET);
 			fwrite(contentBuffer, TSMS_FILE_CONTENT_BLOCK, 1, file->filesystem->__native_file);
 			length -= TSMS_FILE_CONTENT_BLOCK;
 		}
 		if (length > 0) {
 			// align the rest
-			pString sub = TSMS_STRING_subString(content, size * TSMS_FILE_CONTENT_BLOCK, content->length);
+			uint8_t *sub = TSMS_NULL;
+			sub = TSMS_UTIL_streamAppend(sub, 0, content + size * TSMS_FILE_CONTENT_BLOCK, length);
 			if (sub == TSMS_NULL) {
-				file->size += content->length - length;
+				free(rest);
+				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
 				return TSMS_ERROR;
 			}
-			if (TSMS_STRING_append(sub, rest) != TSMS_SUCCESS) {
-				TSMS_STRING_release(sub);
-				TSMS_STRING_release(rest);
-				file->size += content->length - length;
+			sub = TSMS_UTIL_streamAppend(sub, length, rest, file->size - pos);
+			if (sub == TSMS_NULL) {
+				free(rest);
+				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
 				return TSMS_ERROR;
 			}
-			TSMS_STRING_release(rest);
-			TSMS_SIZE restSize = sub->length / TSMS_FILE_CONTENT_BLOCK;
-			length = sub->length;
+			free(rest);
+			TSMS_SIZE restSize = (length + file->size - pos) / TSMS_FILE_CONTENT_BLOCK;
+			length += file->size - pos;
 			TSMS_POS i;
 			for (i = blockPos + size; i < file->blocks->length; i++) {
 				long offset = file->blocks->list[i];
 				TSMS_SIZE block = min(length, TSMS_FILE_CONTENT_BLOCK);
-				strncpy(contentBuffer, sub->cStr + (i - blockPos - size) * TSMS_FILE_CONTENT_BLOCK, block);
+				memcpy(contentBuffer, sub + (i - blockPos - size) * TSMS_FILE_CONTENT_BLOCK, block);
 				fseek(file->filesystem->__native_file, offset, SEEK_SET);
 				fwrite(contentBuffer, block, 1, file->filesystem->__native_file);
 				length -= block;
@@ -533,12 +539,12 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos
 				for (i = 0; i < restSize; i++) {
 					long offset = __internal_tsms_alloc_content_block(file->filesystem);
 					if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-						TSMS_STRING_release(sub);
-						file->size += content->length - length;
+						free(sub);
+						file->size += ssize - length;
 						__internal_tsms_save_header(file->__native_offset, file);
 						return TSMS_ERROR;
 					}
-					strncpy(contentBuffer, sub->cStr + (i + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK,
+					memcpy(contentBuffer, sub + (i + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK,
 					        TSMS_FILE_CONTENT_BLOCK);
 					fseek(file->filesystem->__native_file, offset, SEEK_SET);
 					fwrite(contentBuffer, TSMS_FILE_CONTENT_BLOCK, 1, file->filesystem->__native_file);
@@ -547,48 +553,53 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos
 				if (length > 0) {
 					long offset = __internal_tsms_alloc_content_block(file->filesystem);
 					if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-						TSMS_STRING_release(sub);
-						file->size += content->length - length;
+						free(sub);
+						file->size += ssize - length;
 						__internal_tsms_save_header(file->__native_offset, file);
 						return TSMS_ERROR;
 					}
-					strncpy(contentBuffer,
-					        sub->cStr + (restSize + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK, length);
+					memcpy(contentBuffer,
+					        sub + (restSize + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK, length);
 					fseek(file->filesystem->__native_file, offset, SEEK_SET);
 					fwrite(contentBuffer, length, 1, file->filesystem->__native_file);
 				}
 			}
-			TSMS_STRING_release(sub);
+			free(sub);
 		}
-		file->size += content->length;
+		file->size += ssize;
 	} else {
 		// can directly go here, but the first if check is for optimization
-		pString rest1 = TSMS_FILESYSTEM_readPartialFile(file, pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK, pos);
-		pString rest2 = TSMS_FILESYSTEM_readPartialFile(file, pos, file->size);
+		uint8_t *rest1 = TSMS_FILESYSTEM_readPartialFile(file, pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK, pos);
+		uint8_t *rest2 = TSMS_FILESYSTEM_readPartialFile(file, pos, file->size);
 		if (rest1 == TSMS_NULL || rest2 == TSMS_NULL) {
-			TSMS_STRING_release(rest1);
-			TSMS_STRING_release(rest2);
+			free(rest1);
+			free(rest2);
 			return TSMS_ERROR;
 		}
-		if (TSMS_STRING_append(rest1, content) != TSMS_SUCCESS) {
-			TSMS_STRING_release(rest1);
-			TSMS_STRING_release(rest2);
+		uint8_t *tmp = TSMS_UTIL_streamAppend(rest1, pos % TSMS_FILE_CONTENT_BLOCK, content, ssize);
+		if (tmp == TSMS_NULL ) {
+			free(rest1);
+			free(rest2);
 			return TSMS_ERROR;
 		}
-		if (TSMS_STRING_append(rest1, rest2) != TSMS_SUCCESS) {
-			TSMS_STRING_release(rest1);
-			TSMS_STRING_release(rest2);
+		rest1 = tmp;
+		tmp = TSMS_UTIL_streamAppend(rest1, pos % TSMS_FILE_CONTENT_BLOCK + ssize, rest2, file->size - pos);
+		if (tmp == TSMS_NULL) {
+			free(rest1);
+			free(rest2);
 			return TSMS_ERROR;
 		}
-		TSMS_STRING_release(rest2);
+		rest1 = tmp;
+		free(rest2);
 		TSMS_POS blockPos = pos / TSMS_FILE_CONTENT_BLOCK;
-		TSMS_SIZE length = rest1->length;
+		TSMS_SIZE rawLength = pos % TSMS_FILE_CONTENT_BLOCK + ssize + file->size - pos;
+		TSMS_SIZE length = pos % TSMS_FILE_CONTENT_BLOCK + ssize + file->size - pos;
 		TSMS_SIZE size = length / TSMS_FILE_CONTENT_BLOCK;
 		TSMS_POS i;
 		for (i = blockPos; i < file->blocks->length; i++) {
 			long offset = file->blocks->list[i];
 			TSMS_SIZE block = min(length, TSMS_FILE_CONTENT_BLOCK);
-			strncpy(contentBuffer, rest1->cStr + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, block);
+			memcpy(contentBuffer, rest1 + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, block);
 			fseek(file->filesystem->__native_file, offset, SEEK_SET);
 			fwrite(contentBuffer, block, 1, file->filesystem->__native_file);
 			length -= block;
@@ -603,12 +614,12 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos
 			for (i = 0; i < size; i++) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
 				if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-					TSMS_STRING_release(rest1);
-					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rest1->length - length;
+					free(rest1);
+					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rawLength - length;
 					__internal_tsms_save_header(file->__native_offset, file);
 					return TSMS_ERROR;
 				}
-				strncpy(contentBuffer, rest1->cStr + (i + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
+				memcpy(contentBuffer, rest1 + (i + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
 				        TSMS_FILE_CONTENT_BLOCK);
 				fseek(file->filesystem->__native_file, offset, SEEK_SET);
 				fwrite(contentBuffer, TSMS_FILE_CONTENT_BLOCK, 1, file->filesystem->__native_file);
@@ -617,19 +628,19 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, pString content, TSMS_POS pos
 			if (length > 0) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
 				if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-					TSMS_STRING_release(rest1);
-					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rest1->length - length;
+					free(rest1);
+					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rawLength - length;
 					__internal_tsms_save_header(file->__native_offset, file);
 					return TSMS_ERROR;
 				}
-				strncpy(contentBuffer, rest1->cStr + (size + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
+				memcpy(contentBuffer, rest1 + (size + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
 				        length);
 				fseek(file->filesystem->__native_file, offset, SEEK_SET);
 				fwrite(contentBuffer, length, 1, file->filesystem->__native_file);
 			}
 		}
-		TSMS_STRING_release(rest1);
-		file->size += content->length;
+		free(rest1);
+		file->size += ssize;
 	}
 	__internal_tsms_save_header(file->__native_offset, file);
 	return TSMS_SUCCESS;
@@ -847,9 +858,9 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 		newFile = TSMS_FILESYSTEM_createFile(dir, file->name, file->options);
 		if (newFile == TSMS_NULL)
 			return TSMS_FAIL;
-		pString content = TSMS_FILESYSTEM_readFile(file);
-		TSMS_RESULT result = TSMS_FILESYSTEM_writeFile(newFile, content);
-		TSMS_STRING_release(content);
+		uint8_t *content = TSMS_FILESYSTEM_readFile(file);
+		TSMS_RESULT result = TSMS_FILESYSTEM_writeFile(newFile, content, file->size);
+		free(content);
 		if (result != TSMS_SUCCESS)
 			return TSMS_FAIL;
 	}
