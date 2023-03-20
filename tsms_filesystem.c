@@ -695,13 +695,13 @@ pString TSMS_FILESYSTEM_getPath(pFile file) {
 
 TSMS_LSIZE TSMS_FILESYSTEM_size(pFile file) {
 	if (TSMS_FILESYSTEM_isFolder(file)) {
-		if (file->size != -1)
-			return file->size;
 		TSMS_LSIZE size = 0;
 		TSMS_LMI it = TSMS_LONG_MAP_iterator(file->files);
 		while (TSMS_LONG_MAP_hasNext(&it)) {
 			TSMS_LME entry = TSMS_LONG_MAP_next(&it);
 			pFile child = entry.value;
+			if (!child->loaded)
+				__internal_tsms_load_file(entry.key, child);
 			size += TSMS_FILESYSTEM_size(child);
 		}
 		return file->size = size;
