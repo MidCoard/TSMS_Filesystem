@@ -14,7 +14,12 @@ uint8_t filenameBuffer[256];
 
 uint8_t contentBuffer[TSMS_FILE_CONTENT_BLOCK];
 
-uint8_t emptyBuffer[0];
+const uint8_t TSMS_FILE_EMPTY_CONTENT[0];
+
+TSMS_INLINE void __internal_tsms_check_and_free(uint8_t * content) {
+	if (content != TSMS_FILE_EMPTY_CONTENT)
+		free(content);
+}
 
 TSMS_INLINE bool __internal_tsms_check_file_name(pFilesystem fs, pString name) {
 	if (name->length > TSMS_FILE_NAME_MAX_LENGTH)
@@ -374,10 +379,14 @@ TSMS_RESULT TSMS_FILESYSTEM_release(pFilesystem filesystem) {
 }
 
 bool TSMS_FILESYSTEM_isFolder(pFile file) {
+	if (file == TSMS_NULL)
+		return false;
 	return (file->options[0] >> 7) == TSMS_FILE_TYPE_FOLDER;
 }
 
 pFile TSMS_FILESYSTEM_getFile(pFile file, pString name) {
+	if (file == TSMS_NULL)
+		return TSMS_NULL;
 	TSMS_LMI it = TSMS_LONG_MAP_iterator(file->files);
 	while (TSMS_LONG_MAP_hasNext(&it)) {
 		TSMS_LME entry = TSMS_LONG_MAP_next(&it);
@@ -392,6 +401,8 @@ pFile TSMS_FILESYSTEM_getFile(pFile file, pString name) {
 }
 
 uint8_t *TSMS_FILESYSTEM_readFile(pFile file) {
+	if (file == TSMS_NULL)
+		return TSMS_NULL;
 	if (TSMS_FILESYSTEM_isFolder(file))
 		return TSMS_NULL;
 #ifdef TSMS_STM32
@@ -428,7 +439,7 @@ uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS en
 #else
 	TSMS_LSIZE size = end - start;
 	if (size == 0)
-		return emptyBuffer;
+		return TSMS_FILE_EMPTY_CONTENT;
 	TSMS_POS pos = start / TSMS_FILE_CONTENT_BLOCK;
 	if (size <= (TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK))) {
 		fseek(file->filesystem->__native_file, file->blocks->list[pos] + (start % TSMS_FILE_CONTENT_BLOCK), SEEK_SET);
@@ -484,7 +495,7 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 		else {
 			rest = TSMS_FILESYSTEM_readPartialFile(file, pos, file->size);
 			if (rest == TSMS_NULL)
-				return TSMS_ERROR;
+				return TSMS_FAIL;
 		}
 		TSMS_POS blockPos = pos / TSMS_FILE_CONTENT_BLOCK;
 		TSMS_SIZE size = length / TSMS_FILE_CONTENT_BLOCK;
@@ -493,7 +504,7 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 			if (TSMS_LONG_LIST_insert(file->blocks, offset , blockPos + i) != TSMS_SUCCESS) {
 				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
-				return TSMS_ERROR;
+				return TSMS_FAIL;
 			}
 			memcpy(contentBuffer, content + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
 			fseek(file->filesystem->__native_file, offset, SEEK_SET);
@@ -505,19 +516,19 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 			uint8_t *sub = TSMS_NULL;
 			sub = TSMS_UTIL_streamAppend(sub, 0, content + size * TSMS_FILE_CONTENT_BLOCK, length);
 			if (sub == TSMS_NULL) {
-				free(rest);
+				__internal_tsms_check_and_free(rest);
 				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
-				return TSMS_ERROR;
+				return TSMS_FAIL;
 			}
 			sub = TSMS_UTIL_streamAppend(sub, length, rest, file->size - pos);
 			if (sub == TSMS_NULL) {
-				free(rest);
+				__internal_tsms_check_and_free(rest);
 				file->size += ssize - length;
 				__internal_tsms_save_header(file->__native_offset, file);
-				return TSMS_ERROR;
+				return TSMS_FAIL;
 			}
-			free(rest);
+			__internal_tsms_check_and_free(rest);
 			TSMS_SIZE restSize = (length + file->size - pos) / TSMS_FILE_CONTENT_BLOCK;
 			length += file->size - pos;
 			TSMS_POS i;
@@ -542,7 +553,7 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 						free(sub);
 						file->size += ssize - length;
 						__internal_tsms_save_header(file->__native_offset, file);
-						return TSMS_ERROR;
+						return TSMS_FAIL;
 					}
 					memcpy(contentBuffer, sub + (i + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK,
 					        TSMS_FILE_CONTENT_BLOCK);
@@ -556,7 +567,7 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 						free(sub);
 						file->size += ssize - length;
 						__internal_tsms_save_header(file->__native_offset, file);
-						return TSMS_ERROR;
+						return TSMS_FAIL;
 					}
 					memcpy(contentBuffer,
 					        sub + (restSize + previousSize - blockPos - size) * TSMS_FILE_CONTENT_BLOCK, length);
@@ -572,25 +583,25 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 		uint8_t *rest1 = TSMS_FILESYSTEM_readPartialFile(file, pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK, pos);
 		uint8_t *rest2 = TSMS_FILESYSTEM_readPartialFile(file, pos, file->size);
 		if (rest1 == TSMS_NULL || rest2 == TSMS_NULL) {
-			free(rest1);
-			free(rest2);
-			return TSMS_ERROR;
+			__internal_tsms_check_and_free(rest1);
+			__internal_tsms_check_and_free(rest2);
+			return TSMS_FAIL;
 		}
 		uint8_t *tmp = TSMS_UTIL_streamAppend(rest1, pos % TSMS_FILE_CONTENT_BLOCK, content, ssize);
 		if (tmp == TSMS_NULL ) {
-			free(rest1);
-			free(rest2);
-			return TSMS_ERROR;
+			__internal_tsms_check_and_free(rest1);
+			__internal_tsms_check_and_free(rest2);
+			return TSMS_FAIL;
 		}
 		rest1 = tmp;
 		tmp = TSMS_UTIL_streamAppend(rest1, pos % TSMS_FILE_CONTENT_BLOCK + ssize, rest2, file->size - pos);
 		if (tmp == TSMS_NULL) {
-			free(rest1);
-			free(rest2);
-			return TSMS_ERROR;
+			__internal_tsms_check_and_free(rest1);
+			__internal_tsms_check_and_free(rest2);
+			return TSMS_FAIL;
 		}
 		rest1 = tmp;
-		free(rest2);
+		__internal_tsms_check_and_free(rest2);
 		TSMS_POS blockPos = pos / TSMS_FILE_CONTENT_BLOCK;
 		TSMS_SIZE rawLength = pos % TSMS_FILE_CONTENT_BLOCK + ssize + file->size - pos;
 		TSMS_SIZE length = pos % TSMS_FILE_CONTENT_BLOCK + ssize + file->size - pos;
@@ -614,10 +625,10 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 			for (i = 0; i < size; i++) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
 				if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-					free(rest1);
+					__internal_tsms_check_and_free(rest1);
 					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rawLength - length;
 					__internal_tsms_save_header(file->__native_offset, file);
-					return TSMS_ERROR;
+					return TSMS_FAIL;
 				}
 				memcpy(contentBuffer, rest1 + (i + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
 				        TSMS_FILE_CONTENT_BLOCK);
@@ -628,10 +639,10 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 			if (length > 0) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
 				if (TSMS_LONG_LIST_add(file->blocks, offset) != TSMS_SUCCESS) {
-					free(rest1);
+					__internal_tsms_check_and_free(rest1);
 					file->size = pos / TSMS_FILE_CONTENT_BLOCK * TSMS_FILE_CONTENT_BLOCK + rawLength - length;
 					__internal_tsms_save_header(file->__native_offset, file);
-					return TSMS_ERROR;
+					return TSMS_FAIL;
 				}
 				memcpy(contentBuffer, rest1 + (size + previousSize - blockPos) * TSMS_FILE_CONTENT_BLOCK,
 				        length);
@@ -639,7 +650,7 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE 
 				fwrite(contentBuffer, length, 1, file->filesystem->__native_file);
 			}
 		}
-		free(rest1);
+		__internal_tsms_check_and_free(rest1);
 		file->size += ssize;
 	}
 	__internal_tsms_save_header(file->__native_offset, file);

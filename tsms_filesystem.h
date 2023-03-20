@@ -14,6 +14,7 @@
 #define TSMS_FILE_HEADER_BLOCK 512
 #define TSMS_FILE_CONTENT_BLOCK 4096
 extern const uint32_t TSMS_FILE_MAGIC;
+extern const uint8_t TSMS_FILE_EMPTY_CONTENT[0];
 
 typedef enum {
 	TSMS_FILE_TYPE_FILE = 0,
