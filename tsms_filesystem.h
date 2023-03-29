@@ -5,7 +5,6 @@
 #include "tsms_math.h"
 #include "tsms_string.h"
 #include "tsms_long_list.h"
-#include "tsms_long_map.h"
 #include "tsms_util.h"
 #include <unistd.h>
 
@@ -34,21 +33,22 @@ typedef struct TSMS_FILESYSTEM tFilesystem;
 typedef tFilesystem* pFilesystem;
 
 struct TSMS_FILE_HANDLER {
-	pString name; // max 255 characters
-	pFile parent;
 	pFilesystem filesystem;
-	TSMS_FILE_OPTION options[4];
-	TSMS_LLLP anchors;
-	TSMS_LMP files; // for folder
-	TSMS_LLLP blocks; // for file
-	bool loaded;
-	TSMS_LSIZE size;
+
+	TSMS_POS offset;
+	pFile parent;
+	TSMS_LLP anchors;
+
 	TSMS_SIZE level;
-#ifdef TSMS_STM32
-#else
-	TSMS_POS __native_offset;
-	// can be access by parent file
-#endif
+	bool loaded;
+
+
+	// documented in README.md
+	pString name; // max 255 characters
+	TSMS_FILE_OPTION options[4];
+	TSMS_MP files; // make sure the string is static
+	TSMS_LLP blocks; // content blocks
+	TSMS_LSIZE size;
 };
 
 struct TSMS_FILESYSTEM {
@@ -56,7 +56,7 @@ struct TSMS_FILESYSTEM {
 	pFile root;
 #ifdef TSMS_STM32
 #else
-	FILE* __native_file;
+	FILE* native;
 #endif
 };
 
@@ -72,11 +72,13 @@ pFile TSMS_FILESYSTEM_createFolder(pFile parent, pString name, uint8_t * options
 
 pFile TSMS_FILESYSTEM_createFile(pFile parent, pString name, uint8_t * options);
 
+TSMS_RESULT TSMS_FILESYSTEM_releaseFile(pFile file);
+
 TSMS_RESULT TSMS_FILESYSTEM_release(pFilesystem filesystem);
 
 bool TSMS_FILESYSTEM_isFolder(pFile file);
 
-pFile TSMS_FILESYSTEM_getFile(pFile file, pString name);
+pFile TSMS_FILESYSTEM_getFile(pFile parent, pString name);
 
 uint8_t *TSMS_FILESYSTEM_readFile(pFile file);
 

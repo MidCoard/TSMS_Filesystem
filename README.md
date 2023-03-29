@@ -14,14 +14,14 @@ The file/folder header contains the following information(we consider this part 
 - The file/folder name (max 255 bytes)
 - One byte 0 to indicate the end of the name
 - Four options (4 bytes)
-- Zero to eight bytes 0 to align the header to 8 bytes (0 to 8 bytes)
-- The file/folder blocks size (8 bytes)
+- Zero to eight bytes 0 to align the header to 8 bytes (0 to 7 bytes)
+- The file/folder blocks size (4 bytes)
 
 The first bit of the options is used to indicate whether the file/folder is a file or a folder.
 The rest of the options are reserved.
 
 Note: the alignment calculation contains the file/folder blocks size.
-So the alignment size is 8 - (4 + the file/folder name length + 1 + 4 + 8) % 8.
+So the alignment size is 8 - (4 + the file/folder name length + 1 + 4 + 4) % 8. (There should not be 8 bytes alignment)
 
 For the file, the following information is stored(we consider this part of the header as the content-definition-block):
 
@@ -52,7 +52,7 @@ Or we simply align the last block of the file/folder to 4096 bytes and allocate 
 
 ### File/Folder Freeing
 
-Currently, we simply fill the first header block with 0.
+Write the first 8 bytes of each block to FF.(So the offset of 0xFFFFFFFFFFFFFFFF is reserved)
 
 ### File/Folder Defragmentation
 
