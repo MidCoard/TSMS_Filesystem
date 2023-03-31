@@ -45,18 +45,27 @@ They are contiguous and the last block may not be full and the file size is used
 
 For the folder, the content-definition-block is used to store the position of the file/folder first header block.
 
+### Memory Space
+
+We store the first 60 allocated freeing memory space information for both header block and content block. If the count of the stored information exceeds 60, we discard the previous information.
+
 ### File/Folder Allocation
 
-Currently, we simply align the last block of the file/folder to 512 bytes and allocate the header block after it.
-Or we simply align the last block of the file/folder to 4096 bytes and allocate the content block after it.
+If there are some free memory space information stored, we use the first one to allocate the header/content block.
+
+If not, we simply align the last block of the file/folder to 512/4096 bytes and allocate the header/content block after it.
 
 ### File/Folder Freeing
 
-Write the first 8 bytes of each block to FF.(So the offset of 0xFFFFFFFFFFFFFFFF is reserved)
+Write the first 8 bytes of each block to 0xff to mark it freed as we may discard the information.(So the offset of 0xffffffffffffffff in block position is reserved)
+
+Add the freed block to the stored information.
 
 ### File/Folder Defragmentation
 
-Currently, there is no defragmentation.
+As we delete the information of the freed block if the count of the stored information exceeds 60, we need to find out leading 0xffffffffffffffff header/content blocks and fragment them if necessary.
+
+Currently, this work has not been done yet.
 
 ### Details
 
@@ -87,7 +96,7 @@ Currently, there is no defragmentation.
 
 #### Read Part of File
 
-1. Check  this is a file not a folder.
+1. Check this is a file not a folder.
 2. Allocate a buffer with the part size.
 3. Calculate the start block position, the end block position and the middle blocks size.
 4. Read the start block to the end position to the buffer.
@@ -98,7 +107,7 @@ Currently, there is no defragmentation.
 #### Insert File
 
 1. Check this is a file not a folder.
-2. Calculate the start block position, the rest size of the start block, the middle blocks size, .
+2. Calculate the start block position, the rest size of the start block and the middle blocks size.
 3. Calculate the end block size.
 4. Allocate a dynamic buffer.
 5. Read the start block to the end position to the buffer.
@@ -123,12 +132,11 @@ Currently, there is no defragmentation.
 
 #### Copy File/Folder to another Folder
 
-1. Create a new file/folder in the new folder.
+1. Create a new file/folder in the new folder with same name and options.
 2. If this is a folder, iteratively copy the files/folders in this folder to the new folder and copy the content-definition-block.
-3. If this is a file, insert the file to the new file.
-4. Copy the definition-block.
-5. Save the new file/folder header block.
-6. Save the new folder header block.
+3. If this is a file, write the file to the new file.
+4. Save the new file/folder header block.
+5. Save the new folder header block.
 
 ## Current Status
 

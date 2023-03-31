@@ -6,12 +6,22 @@
 #include "tsms_string.h"
 #include "tsms_long_list.h"
 #include "tsms_util.h"
+#include "tsms_long_set.h"
+#include "tsms_deque.h"
 #include <unistd.h>
 
 #define TSMS_FILE_NAME_MAX_LENGTH 255
 #define TSMS_FILE_UNIT 8
 #define TSMS_FILE_HEADER_BLOCK 512
 #define TSMS_FILE_CONTENT_BLOCK 4096
+
+#define TSMS_FILESYSTEM_PLATFORM_SENSITIVE
+
+#define TSMS_FILESYSTEM_INTERNAL_OFFSET 0
+#define TSMS_FILESYSTEM_HEADER_OFFSET 1048576
+#define TSMS_FILESYSTEM_CONTENT_OFFSET 10485760
+#define TSMS_FILESYSTEM_AVAILABLE_BLOCK_THRESHOLD 60
+
 extern const uint32_t TSMS_FILE_MAGIC;
 extern const uint8_t TSMS_FILE_EMPTY_CONTENT[0];
 
@@ -49,6 +59,8 @@ struct TSMS_FILE_HANDLER {
 	TSMS_MP files; // make sure the string is static
 	TSMS_LLP blocks; // content blocks
 	TSMS_LSIZE size;
+
+	bool dirty;
 };
 
 struct TSMS_FILESYSTEM {
@@ -58,6 +70,10 @@ struct TSMS_FILESYSTEM {
 #else
 	FILE* native;
 #endif
+	TSMS_POS headerEnd;
+	TSMS_POS contentEnd;
+	TSMS_DP headerDeque;
+	TSMS_DP contentDeque;
 };
 
 extern pFilesystem defaultFilesystem;
@@ -86,7 +102,7 @@ uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS en
 
 TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE size);
 
-TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, uint8_t *content, TSMS_LSIZE size, TSMS_POS pos);
+TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_POS pos, TSMS_LSIZE size);
 
 TSMS_RESULT TSMS_FILESYSTEM_emptyFile(pFile file);
 
