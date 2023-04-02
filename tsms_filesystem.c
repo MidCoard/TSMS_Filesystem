@@ -459,6 +459,10 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
 		}
+		filesystem->headerEnd = 0;
+		filesystem->contentEnd = 0;
+		filesystem->headerDeque = TSMS_DEQUE_create();
+		filesystem->contentDeque = TSMS_DEQUE_create();
 		filesystem->root = __internal_tsms_read_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_NULL, true);
 		if (filesystem->root == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
@@ -472,11 +476,11 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 		}
 		filesystem->root = __internal_tsms_create_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_STRING_ROOT,
 		                                               TSMS_FILE_TYPE_FOLDER, TSMS_NULL, 0);
+		__internal_tsms_read_filesystem(filesystem);
 		if (filesystem->root == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
 		}
-		__internal_tsms_read_filesystem(filesystem);
 	}
 #endif
 	return filesystem;
@@ -659,7 +663,6 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 	}
 	TSMS_SIZE endBlockSize = ((size - startBlockSize) % TSMS_FILE_CONTENT_BLOCK) + startBlockSize +
 	                         (file->size - (startBlockSize + 1) * TSMS_FILE_CONTENT_BLOCK);
-
 
 	//todo
 
