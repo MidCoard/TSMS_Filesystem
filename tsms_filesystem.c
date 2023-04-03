@@ -462,10 +462,7 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
 		}
-		filesystem->headerEnd = 0;
-		filesystem->contentEnd = 0;
-		filesystem->headerDeque = TSMS_DEQUE_create();
-		filesystem->contentDeque = TSMS_DEQUE_create();
+		__internal_tsms_read_filesystem(filesystem);
 		filesystem->root = __internal_tsms_read_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_NULL, true);
 		if (filesystem->root == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
@@ -479,8 +476,10 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 		}
 		filesystem->root = __internal_tsms_create_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_STRING_ROOT,
 		                                               TSMS_FILE_TYPE_FOLDER, TSMS_NULL, 0);
-		__internal_tsms_read_filesystem(filesystem);
 		filesystem->headerEnd = TSMS_FILE_HEADER_BLOCK;
+		filesystem->headerDeque = TSMS_DEQUE_create();
+		filesystem->contentEnd = 0;
+		filesystem->contentDeque = TSMS_DEQUE_create();
 		if (filesystem->root == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
