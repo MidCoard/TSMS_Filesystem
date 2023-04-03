@@ -32,7 +32,8 @@ TSMS_INLINE struct __tsms_internal_pair *__internal_tsms_create_pair(TSMS_POS of
 TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_seek(void *handle, long offset) {
 #ifdef STM32
 #else
-	fseek(handle, offset, SEEK_SET);
+	if (fseek(handle, offset, SEEK_SET) != 0)
+		printf("fseek failed");
 #endif
 }
 
@@ -245,7 +246,7 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 	                                                                                    TSMS_FILE_UNIT) :
 	                      totalSize / (TSMS_FILE_HEADER_BLOCK - TSMS_FILE_UNIT) + 1;
 	for (TSMS_POS i = file->anchors->length; i < blockSize - 1; i++)
-		TSMS_LONG_LIST_add(file->anchors, __internal_tsms_alloc_content_block(file->filesystem));
+		TSMS_LONG_LIST_add(file->anchors, __internal_tsms_alloc_header_block(file->filesystem));
 	TSMS_POS anchorPos = 0;
 	if (TSMS_FILESYSTEM_isFolder(file)) {
 		TSMS_LSIZE size = file->files->size;
@@ -476,6 +477,7 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
 		}
+		filesystem->headerEnd = TSMS_FILE_HEADER_BLOCK;
 		filesystem->root = __internal_tsms_create_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_STRING_ROOT,
 		                                               TSMS_FILE_TYPE_FOLDER, TSMS_NULL, 0);
 		__internal_tsms_read_filesystem(filesystem);

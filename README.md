@@ -109,8 +109,8 @@ Currently, this work has not been done yet.
 1. Check this is a file not a folder.
 2. Calculate the start block position, the rest size of the start block and the middle blocks size.
 3. Calculate the end block size.
-4. Allocate a dynamic buffer.
-5. Read the start block to the end position to the buffer.
+4. Allocate a buffer.
+5. Read the rest of the start block to the buffer.
 6. Write rest size of the data to the rest of the start block.
 7. Allocate the middle blocks as documented in the File/Folder Allocation section.(as we do not free the file blocks, we can simply reuse them if the new file blocks size is no more than the old one)
 8. Write the middle blocks.
@@ -145,8 +145,9 @@ You can use this filesystem on an existed OS.
 ## Current Plan
 
 - [ ] Run on bare metal.
-- [ ] Rewrite the filesystem in proper way.
+- [X] Rewrite the filesystem in proper way.
 - [ ] Add defragmentation.
-- [ ] Add more efficient allocation.
-- [ ] Add more efficient freeing.
+- [X] Add more efficient allocation.
+- [X] Add more efficient freeing.
+- [ ] Filestream.
 
