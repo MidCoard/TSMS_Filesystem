@@ -492,8 +492,6 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 
 pFile TSMS_FILESYSTEM_createFolder(pFile parent, pString name, uint8_t *options) {
 	pFile file = TSMS_FILESYSTEM_getFile(parent, name);
-	if (file != TSMS_NULL && TSMS_FILESYSTEM_isFolder(file))
-		return file;
 	if (file != TSMS_NULL)
 		return TSMS_NULL;
 	if (!__internal_tsms_check_file_name(parent->filesystem, name))
@@ -504,8 +502,6 @@ pFile TSMS_FILESYSTEM_createFolder(pFile parent, pString name, uint8_t *options)
 
 pFile TSMS_FILESYSTEM_createFile(pFile parent, pString name, uint8_t *options) {
 	pFile file = TSMS_FILESYSTEM_getFile(parent, name);
-	if (file != TSMS_NULL && !TSMS_FILESYSTEM_isFolder(file))
-		return file;
 	if (file != TSMS_NULL)
 		return TSMS_NULL;
 	if (!__internal_tsms_check_file_name(parent->filesystem, name))
