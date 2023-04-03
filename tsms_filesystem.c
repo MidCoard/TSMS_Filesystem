@@ -941,9 +941,22 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 		}
 	} else {
 		pFile newFile = TSMS_FILESYSTEM_getFile(dir, file->name);
-		if (newFile != TSMS_NULL)
-			return TSMS_FAIL;
-		newFile = TSMS_FILESYSTEM_createFile(dir, file->name, file->options);
+		int cur = 1;
+		pString temp = TSMS_STRING_createAndInit(file->name->cStr);
+		while (newFile != TSMS_NULL) {
+			TSMS_STRING_release(temp);
+			if (cur > 1000)
+				return TSMS_FAIL;
+			temp = TSMS_STRING_createAndInit(file->name->cStr);
+			TSMS_STRING_append(temp, TSMS_STRING_SPACE);
+			pString num = TSMS_STRING_createAndInitInt(cur);
+			TSMS_STRING_append(temp, num);
+			TSMS_STRING_release(num);
+			newFile = TSMS_FILESYSTEM_getFile(dir, temp);
+			cur++;
+		}
+		newFile = TSMS_FILESYSTEM_createFile(dir, temp, file->options);
+		TSMS_STRING_release(temp);
 		if (newFile == TSMS_NULL)
 			return TSMS_FAIL;
 		uint8_t *content = TSMS_FILESYSTEM_readFile(file);
