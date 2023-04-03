@@ -191,11 +191,17 @@ TSMS_INLINE long __internal_tsms_alloc_header_block(pFilesystem filesystem) {
 		long offset = pair->offset + pair->count;
 		free(pair);
 		printf("Allocating new header block at %ld\n", offset);
+		long cur = __internal_tsms_tell(filesystem->native);
+		__internal_tsms_save_filesystem(filesystem);
+		__internal_tsms_seek(filesystem->native, cur);
 		return offset;
 	}
 	long offset = filesystem->headerEnd + TSMS_FILESYSTEM_HEADER_OFFSET;
 	filesystem->headerEnd += TSMS_FILE_HEADER_BLOCK;
 	printf("Allocating new header block at %ld\n", offset);
+	long cur = __internal_tsms_tell(filesystem->native);
+	__internal_tsms_save_filesystem(filesystem);
+	__internal_tsms_seek(filesystem->native, cur);
 	return offset;
 }
 
@@ -209,11 +215,17 @@ TSMS_INLINE long __internal_tsms_alloc_content_block(pFilesystem filesystem) {
 		long offset = pair->offset + pair->count;
 		free(pair);
 		printf("Allocating new content block at %ld\n", offset);
+		long cur = __internal_tsms_tell(filesystem->native);
+		__internal_tsms_save_filesystem(filesystem);
+		__internal_tsms_seek(filesystem->native, cur);
 		return offset;
 	}
 	long offset = filesystem->contentEnd + TSMS_FILESYSTEM_CONTENT_OFFSET;
 	filesystem->contentEnd += TSMS_FILE_CONTENT_BLOCK;
 	printf("Allocating new content block at %ld\n", offset);
+	long cur = __internal_tsms_tell(filesystem->native);
+	__internal_tsms_save_filesystem(filesystem);
+	__internal_tsms_seek(filesystem->native, cur);
 	return offset;
 
 }
@@ -649,6 +661,8 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 	// in situation two, the start block, the content and the following blocks.
 	TSMS_POS startBlockPos = pos / TSMS_FILE_CONTENT_BLOCK;
 	TSMS_SIZE startBlockRestSize = (TSMS_FILE_CONTENT_BLOCK - (pos % TSMS_FILE_CONTENT_BLOCK)) % TSMS_FILE_CONTENT_BLOCK;
+	if (pos == file->size && pos % TSMS_FILE_CONTENT_BLOCK == 0)
+		startBlockRestSize = 0;
 	// in situation one, the startBlockPos may not exist (at the end of the file) but the startBlockRestSize is 0.
 	// in situation two, the startBlockPos must exist and the startBlockRestSize is not 0.
 	memcpy(contentBuffer, content, startBlockRestSize);
