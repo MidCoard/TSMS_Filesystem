@@ -179,7 +179,7 @@ TSMS_INLINE TSMS_SIZE __internal_tsms_calc_definition_block_size(pFile file) {
 
 TSMS_INLINE TSMS_SIZE __internal_tsms_calc_header_size(pFile file) {
 	return __internal_tsms_calc_definition_block_size(file) +
-	       (TSMS_FILESYSTEM_isFolder(file) ? 8 * file->files->size : 8 * file->blocks->length * 8 + 8);
+	       (TSMS_FILESYSTEM_isFolder(file) ? 8 * file->files->size : 8 * file->blocks->length + 8);
 }
 
 TSMS_INLINE long __internal_tsms_alloc_header_block(pFilesystem filesystem) {
