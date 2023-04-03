@@ -249,8 +249,7 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 		TSMS_LONG_LIST_add(file->anchors, __internal_tsms_alloc_header_block(file->filesystem));
 	TSMS_POS anchorPos = 0;
 	if (TSMS_FILESYSTEM_isFolder(file)) {
-		TSMS_SIZE size = file->files->size;
-		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_SIZE));
+		__internal_tsms_write(file->filesystem->native, &file->files->size, sizeof(TSMS_SIZE));
 		TSMS_MI iter = TSMS_MAP_iterator(file->files);
 		while (TSMS_MAP_hasNext(&iter)) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
@@ -265,10 +264,8 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 			currentSize += TSMS_FILE_UNIT;
 		}
 	} else {
-		TSMS_SIZE size = file->blocks->length;
-		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_SIZE));
-		size = file->size;
-		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_LSIZE));
+		__internal_tsms_write(file->filesystem->native, &file->blocks->length, sizeof(TSMS_SIZE));
+		__internal_tsms_write(file->filesystem->native, &file->size, sizeof(TSMS_LSIZE));
 		for (TSMS_POS i = 0; i < file->blocks->length; i++) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
 				long offset = file->anchors->list[anchorPos++];
@@ -648,27 +645,27 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 	// in situation one, no start block, only the content and the following blocks.
 	// in situation two, the start block, the content and the following blocks.
 	TSMS_POS startBlockPos = pos / TSMS_FILE_CONTENT_BLOCK;
-	TSMS_SIZE startBlockSize = (TSMS_FILE_CONTENT_BLOCK - (pos % TSMS_FILE_CONTENT_BLOCK)) % TSMS_FILE_CONTENT_BLOCK;
-	// in situation one, the startBlockPos may not exist (at the end of the file) but the startBlockSize is 0.
-	// in situation two, the startBlockPos must exist and the startBlockSize is not 0.
-	memcpy(contentBuffer, content, startBlockSize);
+	TSMS_SIZE startBlockRestSize = (TSMS_FILE_CONTENT_BLOCK - (pos % TSMS_FILE_CONTENT_BLOCK)) % TSMS_FILE_CONTENT_BLOCK;
+	// in situation one, the startBlockPos may not exist (at the end of the file) but the startBlockRestSize is 0.
+	// in situation two, the startBlockPos must exist and the startBlockRestSize is not 0.
+	memcpy(contentBuffer, content, startBlockRestSize);
 	// write 0 length does not matter
-	if (startBlockSize != 0) {
+	if (startBlockRestSize != 0) {
 		__internal_tsms_seek(file->filesystem->native,
 		                     file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK));
-		__internal_tsms_read(file->filesystem->native, contentBuffer2, startBlockSize);
+		__internal_tsms_read(file->filesystem->native, contentBuffer2, startBlockRestSize);
 	}
 	__internal_tsms_seek(file->filesystem->native, file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK));
-	__internal_tsms_write(file->filesystem->native, contentBuffer, startBlockSize);
+	__internal_tsms_write(file->filesystem->native, contentBuffer, startBlockRestSize);
 	// middleBlockSize > 0 only if the rest size is larger than TSMS_FILE_CONTENT_BLOCK
-	TSMS_SIZE middleBlockSize = (size - startBlockSize) / TSMS_FILE_CONTENT_BLOCK;
+	TSMS_SIZE middleBlockSize = (size - startBlockRestSize) / TSMS_FILE_CONTENT_BLOCK;
 	// write the middle full blocks (the size must be TSMS_FILE_CONTENT_BLOCK)
 	for (TSMS_POS i = 0; i < middleBlockSize; i++) {
 		long offset = __internal_tsms_alloc_content_block(file->filesystem);
 		// in situation one, no start block, so the insert-position is startBlockPos + i
 		// in situation two, should be start block, so the insert-position is startBlockPos + i + 1
-		TSMS_LONG_LIST_insert(file->blocks, startBlockPos + i + (startBlockSize != 0), offset);
-		memcpy(contentBuffer, content + startBlockSize + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
+		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + i + (startBlockRestSize != 0));
+		memcpy(contentBuffer, content + startBlockRestSize + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
 		__internal_tsms_seek(file->filesystem->native, offset);
 		__internal_tsms_write(file->filesystem->native, contentBuffer, TSMS_FILE_CONTENT_BLOCK);
 	}
@@ -678,35 +675,35 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 	// 3. the rest of the following blocks after the start block
 	// if the 1 and 2's size is TSMS_FILE_CONTENT_BLOCK or 0, we don't need to do anything to the following blocks after the start block, so special case
 
-	TSMS_LSIZE restSize = size - startBlockSize - middleBlockSize * TSMS_FILE_CONTENT_BLOCK;
-	TSMS_LSIZE size1And2 = restSize + startBlockSize;
+	TSMS_LSIZE restSize = size - startBlockRestSize - middleBlockSize * TSMS_FILE_CONTENT_BLOCK;
+	TSMS_LSIZE size1And2 = restSize + startBlockRestSize;
 	if ((size1And2) % TSMS_FILE_CONTENT_BLOCK != 0) {
 		// general case
 		// align the rest of the start block if possible
 		TSMS_LSIZE total = size1And2 + file->size - pos;
 		uint8_t * buffer = malloc(sizeof(uint8_t) * total);
-		memcpy(buffer, content + startBlockSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
-		memcpy(buffer + restSize, contentBuffer2, startBlockSize);
-		TSMS_SIZE blockPos = startBlockPos + middleBlockSize + (startBlockSize != 0);
+		memcpy(buffer, content + startBlockRestSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
+		memcpy(buffer + restSize, contentBuffer2, startBlockRestSize);
+		TSMS_SIZE blockPos = startBlockPos + middleBlockSize + (startBlockRestSize != 0);
 		for (TSMS_POS i = blockPos; i < file->blocks->length;i++) {
 			__internal_tsms_seek(file->filesystem->native, file->blocks->list[i]);
-			__internal_tsms_read(file->filesystem->native, buffer + restSize + startBlockSize + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - size1And2 - (i - blockPos) * TSMS_FILE_CONTENT_BLOCK));
+			__internal_tsms_read(file->filesystem->native, buffer + restSize + startBlockRestSize + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - size1And2 - (i - blockPos) * TSMS_FILE_CONTENT_BLOCK));
 		}
 		TSMS_SIZE endBlockSize = total % TSMS_FILE_CONTENT_BLOCK == 0 ? total / TSMS_FILE_CONTENT_BLOCK : total / TSMS_FILE_CONTENT_BLOCK + 1;
 		for (TSMS_POS i = 0; i < endBlockSize; i++) {
 			if (blockPos + i == file->blocks->length) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
-				TSMS_LONG_LIST_insert(file->blocks, blockPos + i, offset);
+				TSMS_LONG_LIST_insert(file->blocks, offset, blockPos + i);
 			}
 			__internal_tsms_seek(file->filesystem->native, file->blocks->list[blockPos + i]);
 			__internal_tsms_write(file->filesystem->native, buffer + i * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - i * TSMS_FILE_CONTENT_BLOCK));
 		}
 	} else if (size1And2 == TSMS_FILE_CONTENT_BLOCK) {
 		// in this case, size 1 and size 2 should not be 0
-		memcpy(contentBuffer, content + startBlockSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
-		memcpy(contentBuffer + restSize, contentBuffer2, startBlockSize);
+		memcpy(contentBuffer, content + startBlockRestSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
+		memcpy(contentBuffer + restSize, contentBuffer2, startBlockRestSize);
 		long offset = __internal_tsms_alloc_content_block(file->filesystem);
-		TSMS_LONG_LIST_insert(file->blocks, startBlockPos + 1, offset);
+		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + 1);
 		__internal_tsms_seek(file->filesystem->native, offset);
 		__internal_tsms_write(file->filesystem->native, contentBuffer, TSMS_FILE_CONTENT_BLOCK);
 	}
@@ -767,6 +764,7 @@ TSMS_LSIZE TSMS_FILESYSTEM_size(pFile file) {
 		}
 		return file->size = size;
 	}
+	__internal_tsms_load_file(file);
 	return file->size;
 }
 
