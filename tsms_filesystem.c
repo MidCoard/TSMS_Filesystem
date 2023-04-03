@@ -967,3 +967,81 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 	}
 	return TSMS_SUCCESS;
 }
+
+pFilestream TSMS_FILE_open(pFile file) {
+	return TSMS_FILE_openWithMode(file, TSMS_FILE_MODE_READ);
+}
+
+pFilestream TSMS_FILE_openWithMode(pFile file, TSMS_FILE_MODE mode) {
+	pFilestream stream = (pFilestream) malloc(sizeof(tFilestream));
+	if (stream == TSMS_NULL) {
+		tString temp = TSMS_STRING_temp("malloc failed for stream");
+		TSMS_ERR_report(TSMS_ERR_MALLOC_FAILED, &temp);
+		return TSMS_NULL;
+	}
+	stream->file = file;
+	stream->mode = mode;
+	stream->pos = 0;
+	return stream;
+}
+
+TSMS_RESULT TSMS_FILE_seek(pFilestream stream, TSMS_POS pos) {
+	if (stream == TSMS_NULL)
+		return TSMS_ERROR;
+	if (pos < 0)
+		return TSMS_ERROR;
+	// pos > file->size is allowed
+	stream->pos = pos;
+	return TSMS_SUCCESS;
+}
+
+TSMS_RESULT TSMS_FILE_read(pFilestream stream, uint8_t *buffer, TSMS_LSIZE size) {
+	if (stream == TSMS_NULL)
+		return TSMS_ERROR;
+	if (stream->pos > stream->file->size)
+		for (TSMS_LSIZE i = 0; i < size; i++)
+			buffer[i] = 0;
+	else if (stream->pos + size > stream->file->size) {
+		uint8_t * b = TSMS_FILESYSTEM_readPartialFile(stream->file, stream->pos, stream->file->size);
+		memcpy(buffer, b, stream->file->size - stream->pos);
+		free(b);
+		for (TSMS_LSIZE i = stream->file->size - stream->pos; i < size; i++)
+			buffer[i] = 0;
+	} else {
+		uint8_t *b = TSMS_FILESYSTEM_readPartialFile(stream->file, stream->pos, stream->pos + size);
+		memcpy(buffer, b, size);
+		free(b);
+	}
+	stream->pos += size;
+	return TSMS_SUCCESS;
+}
+
+TSMS_RESULT TSMS_FILE_write(pFilestream stream, uint8_t *buffer, TSMS_LSIZE size) {
+	if (stream == TSMS_NULL)
+		return TSMS_ERROR;
+	if (stream->mode == TSMS_FILE_MODE_READ)
+		return TSMS_ERROR;
+	if (stream->pos > stream->file->size) {
+		uint8_t *b = malloc(sizeof(uint8_t) * (stream->pos - stream->file->size));
+		for (TSMS_LSIZE i = 0; i < stream->pos - stream->file->size; i++)
+			b[i] = 0;
+		TSMS_FILESYSTEM_insertFile(stream->file, b, stream->file->size, stream->pos - stream->file->size);
+		free(b);
+	}
+	TSMS_RESULT result = TSMS_FILESYSTEM_insertFile(stream->file, buffer, stream->pos, size);
+	stream->pos += size;
+	return result;
+}
+
+TSMS_POS TSMS_FILE_tell(pFilestream stream) {
+	if (stream == TSMS_NULL)
+		return TSMS_ERROR;
+	return stream->pos;
+}
+
+TSMS_RESULT TSMS_FILESYSTEM_close(pFilestream stream) {
+	if (stream == TSMS_NULL)
+		return TSMS_ERROR;
+	free(stream);
+	return TSMS_SUCCESS;
+}
