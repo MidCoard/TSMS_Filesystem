@@ -249,8 +249,8 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 		TSMS_LONG_LIST_add(file->anchors, __internal_tsms_alloc_header_block(file->filesystem));
 	TSMS_POS anchorPos = 0;
 	if (TSMS_FILESYSTEM_isFolder(file)) {
-		TSMS_LSIZE size = file->files->size;
-		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_LSIZE));
+		TSMS_SIZE size = file->files->size;
+		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_SIZE));
 		TSMS_MI iter = TSMS_MAP_iterator(file->files);
 		while (TSMS_MAP_hasNext(&iter)) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
@@ -265,8 +265,8 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 			currentSize += TSMS_FILE_UNIT;
 		}
 	} else {
-		TSMS_LSIZE size = file->blocks->length;
-		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_LSIZE));
+		TSMS_SIZE size = file->blocks->length;
+		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_SIZE));
 		size = file->size;
 		__internal_tsms_write(file->filesystem->native, &size, sizeof(TSMS_LSIZE));
 		for (TSMS_POS i = 0; i < file->blocks->length; i++) {
@@ -477,10 +477,10 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
 		}
-		filesystem->headerEnd = TSMS_FILE_HEADER_BLOCK;
 		filesystem->root = __internal_tsms_create_file(filesystem, TSMS_FILESYSTEM_HEADER_OFFSET, TSMS_STRING_ROOT,
 		                                               TSMS_FILE_TYPE_FOLDER, TSMS_NULL, 0);
 		__internal_tsms_read_filesystem(filesystem);
+		filesystem->headerEnd = TSMS_FILE_HEADER_BLOCK;
 		if (filesystem->root == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
