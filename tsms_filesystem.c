@@ -803,12 +803,15 @@ TSMS_RESULT TSMS_FILESYSTEM_deleteFile(pFile file) {
 	return TSMS_SUCCESS;
 }
 
+// if the folder is not empty, it will not be deleted
 TSMS_RESULT TSMS_FILESYSTEM_deleteFolder(pFile file) {
 	if (file == TSMS_NULL)
 		return TSMS_ERROR;
 	if (!TSMS_FILESYSTEM_isFolder(file))
 		return TSMS_ERROR;
 	if (file->parent == TSMS_NULL)
+		return TSMS_ERROR;
+	if (file->files->size > 0)
 		return TSMS_ERROR;
 	if (TSMS_MAP_remove(file->parent->files, file->name) != TSMS_SUCCESS)
 		return TSMS_FAIL;
