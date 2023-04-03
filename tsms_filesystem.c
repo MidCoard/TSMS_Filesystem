@@ -10,6 +10,8 @@ pString TSMS_STRING_CURRENT;
 
 pString TSMS_STRING_PARENT;
 
+pString TSMS_STRING_SPACE;
+
 uint8_t filenameBuffer[256];
 
 uint8_t contentBuffer[TSMS_FILE_CONTENT_BLOCK];
@@ -433,6 +435,7 @@ TSMS_RESULT TSMS_FILESYSTEM_init(TSMS_CLOCK_FREQUENCY frequency) {
 	TSMS_STRING_ROOT = TSMS_STRING_static("root");
 	TSMS_STRING_CURRENT = TSMS_STRING_static(".");
 	TSMS_STRING_PARENT = TSMS_STRING_static("..");
+	TSMS_STRING_SPACE = TSMS_STRING_static(" ");
 	if (TSMS_STRING_ROOT == TSMS_NULL || TSMS_STRING_CURRENT == TSMS_NULL || TSMS_STRING_PARENT == TSMS_NULL)
 		return TSMS_ERROR;
 	TSMS_FILESYSTEM_setDefaultFilesystem(TSMS_FILESYSTEM_createFilesystem('/'));
@@ -828,8 +831,8 @@ pFile TSMS_FILESYSTEM_resolve(pFile current, pString path) {
 		return TSMS_NULL;
 	TSMS_LP list = TSMS_STRING_split(path, current->filesystem->split->cStr[0]);
 	pFile file = current;
-	TSMS_POS i;
-	for (i = 0; i < list->length; i++) {
+	TSMS_POS i = 0;
+	while (i < list->length) {
 		pString arg = list->list[i];
 		if (arg->length == 0 && i == 0)
 			file = current->filesystem->root;
@@ -843,6 +846,7 @@ pFile TSMS_FILESYSTEM_resolve(pFile current, pString path) {
 		} else
 			file = TSMS_FILESYSTEM_getFile(file, arg);
 		TSMS_STRING_release(arg);
+		i++;
 		if (file == TSMS_NULL)
 			break;
 	}
@@ -911,9 +915,22 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 		return TSMS_ERROR;
 	if (TSMS_FILESYSTEM_isFolder(file)) {
 		pFile newFile = TSMS_FILESYSTEM_getFile(dir, file->name);
-		if (newFile != TSMS_NULL)
-			return TSMS_FAIL;
-		newFile = TSMS_FILESYSTEM_createFolder(dir, file->name, file->options);
+		int cur = 1;
+		pString temp = TSMS_STRING_createAndInit(file->name->cStr);
+		while (newFile != TSMS_NULL) {
+			TSMS_STRING_release(temp);
+			if (cur > 1000)
+				return TSMS_FAIL;
+			temp = TSMS_STRING_createAndInit(file->name->cStr);
+			TSMS_STRING_append(temp, TSMS_STRING_SPACE);
+			pString num = TSMS_STRING_createAndInitInt(cur);
+			TSMS_STRING_append(temp, num);
+			TSMS_STRING_release(num);
+			newFile = TSMS_FILESYSTEM_getFile(dir, temp);
+			cur++;
+		}
+		newFile = TSMS_FILESYSTEM_createFolder(dir, temp, file->options);
+		TSMS_STRING_release(temp);
 		if (newFile == TSMS_NULL)
 			return TSMS_FAIL;
 		TSMS_MI iter = TSMS_MAP_iterator(file->files);
