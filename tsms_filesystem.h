@@ -112,6 +112,8 @@ uint8_t *TSMS_FILESYSTEM_readFile(pFile file);
 
 uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end);
 
+TSMS_RESULT TSMS_FILESYSTEM_freeContentBuffer(uint8_t *buffer);
+
 TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE size);
 
 TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_POS pos, TSMS_LSIZE size);
@@ -138,6 +140,8 @@ TSMS_RESULT TSMS_FILESYSTEM_move(pFile file, pFile dir);
 
 TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir);
 
+bool TSMS_FILESYSTEM_contentEquals(pFile file1, pFile file2);
+
 pFilestream TSMS_FILE_open(pFile file);
 
 pFilestream TSMS_FILE_openWithMode(pFile file, TSMS_FILE_MODE mode);
@@ -150,7 +154,7 @@ TSMS_RESULT TSMS_FILE_write(pFilestream stream, uint8_t *buffer, TSMS_LSIZE size
 
 TSMS_POS TSMS_FILE_tell(pFilestream stream);
 
-TSMS_RESULT TSMS_FILESYSTEM_close(pFilestream stream);
+TSMS_RESULT TSMS_FILE_close(pFilestream stream);
 
 
 #endif //TSMS_FILESYSTEM_H

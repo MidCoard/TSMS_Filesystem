@@ -1,3 +1,4 @@
+#include <errno.h>
 #include "tsms_filesystem.h"
 
 const uint32_t TSMS_FILE_MAGIC = 0x3def11c1;
@@ -36,6 +37,16 @@ TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_seek(void *h
 #else
 	if (fseek(handle, offset, SEEK_SET) != 0)
 		printf("fseek failed");
+#ifdef TSMS_DEBUG
+	printf("Seeked to %x", offset);
+	if (offset < TSMS_FILESYSTEM_HEADER_OFFSET)
+		printf(" (internal)");
+	else if (offset < TSMS_FILESYSTEM_CONTENT_OFFSET)
+		printf(" (header)");
+	else
+		printf(" (content)");
+	printf("\n");
+#endif
 #endif
 }
 
@@ -49,14 +60,24 @@ TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE long __internal_tsms_tell(void *h
 TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_write(void *handle, const void *ptr, size_t size) {
 #ifdef STM32
 #else
-	fwrite(ptr, size, 1, handle);
+	size_t t = fwrite(ptr, size, 1, handle);
+#ifdef TSMS_DEBUG
+	printf("Wrote %x bytes\n", size);
+#endif
 #endif
 }
 
 TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_read(void *handle, void *ptr, size_t size) {
 #ifdef STM32
 #else
-	fread(ptr, size, 1, handle);
+	size_t t = fread(ptr, size, 1, handle);
+	if (t != 1) {
+		printf("fread failed, %d\n", ferror(handle));
+		printf("errno: %d\n", errno);
+	}
+#ifdef TSMS_DEBUG
+	printf("Read %x bytes\n", size);
+#endif
 #endif
 }
 
@@ -68,6 +89,9 @@ TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_close_filesy
 }
 
 TSMS_INLINE void __internal_tsms_save_filesystem(pFilesystem fs) {
+#ifdef TSMS_STM32
+	printf("Saving filesystem...\n");
+#endif
 	__internal_tsms_seek(fs->native, TSMS_FILESYSTEM_INTERNAL_OFFSET);
 	__internal_tsms_write(fs->native, &fs->headerEnd, sizeof(TSMS_POS));
 	__internal_tsms_write(fs->native, &fs->contentEnd, sizeof(TSMS_POS));
@@ -83,6 +107,9 @@ TSMS_INLINE void __internal_tsms_save_filesystem(pFilesystem fs) {
 		__internal_tsms_write(fs->native, &pair->offset, sizeof(long));
 		__internal_tsms_write(fs->native, &pair->count, sizeof(long));
 	}
+#ifdef TSMS_STM32
+	printf("Filesystem saved\n");
+#endif
 }
 
 TSMS_INLINE void __internal_tsms_read_filesystem(pFilesystem fs) {
@@ -111,6 +138,9 @@ TSMS_INLINE void __internal_tsms_read_filesystem(pFilesystem fs) {
 }
 
 TSMS_INLINE void __internal_tsms_dealloc_header_block(pFilesystem fs, long offset) {
+#ifdef TSMS_DEBUG
+	printf("Deallocating header block at %x\n", offset);
+#endif
 	bool flag = false;
 	for (TSMS_LKNP node = fs->headerDeque->list->head; node != TSMS_NULL; node = node->next) {
 		struct __tsms_internal_pair *pair = node->element;
@@ -132,6 +162,9 @@ TSMS_INLINE void __internal_tsms_dealloc_header_block(pFilesystem fs, long offse
 }
 
 TSMS_INLINE void __internal_tsms_dealloc_content_block(pFilesystem fs, long offset) {
+#ifdef TSMS_DEBUG
+	printf("Deallocating content block at %x\n", offset);
+#endif
 	bool flag = false;
 	for (TSMS_LKNP node = fs->headerDeque->list->head; node != TSMS_NULL; node = node->next) {
 		struct __tsms_internal_pair *pair = node->element;
@@ -190,16 +223,26 @@ TSMS_INLINE long __internal_tsms_alloc_header_block(pFilesystem filesystem) {
 			TSMS_DEQUE_removeLast(filesystem->headerDeque);
 		long offset = pair->offset + pair->count;
 		free(pair);
-		printf("Allocating new header block at %ld\n", offset);
+#ifdef TSMS_DEBUG
+		printf("Allocating new header block at %x\n", offset);
+#endif
 		long cur = __internal_tsms_tell(filesystem->native);
+#ifdef TSMS_DEBUG
+		printf("record native position: %x\n", cur);
+#endif
 		__internal_tsms_save_filesystem(filesystem);
 		__internal_tsms_seek(filesystem->native, cur);
 		return offset;
 	}
 	long offset = filesystem->headerEnd + TSMS_FILESYSTEM_HEADER_OFFSET;
 	filesystem->headerEnd += TSMS_FILE_HEADER_BLOCK;
-	printf("Allocating new header block at %ld\n", offset);
+#ifdef TSMS_DEBUG
+	printf("Allocating new header block at %x\n", offset);
+#endif
 	long cur = __internal_tsms_tell(filesystem->native);
+#ifdef TSMS_DEBUG
+	printf("record native position: %x\n", cur);
+#endif
 	__internal_tsms_save_filesystem(filesystem);
 	__internal_tsms_seek(filesystem->native, cur);
 	return offset;
@@ -214,16 +257,26 @@ TSMS_INLINE long __internal_tsms_alloc_content_block(pFilesystem filesystem) {
 			TSMS_DEQUE_removeLast(filesystem->contentDeque);
 		long offset = pair->offset + pair->count;
 		free(pair);
-		printf("Allocating new content block at %ld\n", offset);
+#ifdef TSMS_DEBUG
+		printf("Allocating new content block at %x\n", offset);
+#endif
 		long cur = __internal_tsms_tell(filesystem->native);
+#ifdef TSMS_DEBUG
+		printf("record native position: %x\n", cur);
+#endif
 		__internal_tsms_save_filesystem(filesystem);
 		__internal_tsms_seek(filesystem->native, cur);
 		return offset;
 	}
 	long offset = filesystem->contentEnd + TSMS_FILESYSTEM_CONTENT_OFFSET;
 	filesystem->contentEnd += TSMS_FILE_CONTENT_BLOCK;
-	printf("Allocating new content block at %ld\n", offset);
+#ifdef TSMS_DEBUG
+	printf("Allocating new content block at %x\n", offset);
+#endif
 	long cur = __internal_tsms_tell(filesystem->native);
+#ifdef TSMS_DEBUG
+	printf("record native position: %x\n", cur);
+#endif
 	__internal_tsms_save_filesystem(filesystem);
 	__internal_tsms_seek(filesystem->native, cur);
 	return offset;
@@ -481,7 +534,7 @@ pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(
 			return TSMS_NULL;
 		}
 	} else {
-		filesystem->native = fopen("filesystem", "wr");
+		filesystem->native = fopen("filesystem", "w+");
 		if (filesystem->native == TSMS_NULL) {
 			TSMS_FILESYSTEM_release(filesystem);
 			return TSMS_NULL;
@@ -575,12 +628,16 @@ pFile TSMS_FILESYSTEM_getFile(pFile parent, pString name) {
 	return child;
 }
 
+
+// will return TSMS_FILE_EMPTY_CONTENT if file is empty
 uint8_t *TSMS_FILESYSTEM_readFile(pFile file) {
 	if (file == TSMS_NULL)
 		return TSMS_NULL;
 	if (TSMS_FILESYSTEM_isFolder(file))
 		return TSMS_NULL;
 	TSMS_LSIZE size = file->size;
+	if (size == 0)
+		return TSMS_FILE_EMPTY_CONTENT;
 	uint8_t *buffer = malloc(sizeof(uint8_t) * size);
 	if (buffer == TSMS_NULL)
 		return TSMS_NULL;
@@ -588,14 +645,13 @@ uint8_t *TSMS_FILESYSTEM_readFile(pFile file) {
 	for (TSMS_POS i = 0; i < file->blocks->length; i++) {
 		TSMS_SIZE block = min(size, TSMS_FILE_CONTENT_BLOCK);
 		__internal_tsms_seek(file->filesystem->native, file->blocks->list[i]);
-		__internal_tsms_read(file->filesystem->native, contentBuffer, block);
-		memcpy(buffer + bufferLength, contentBuffer, block);
+		__internal_tsms_read(file->filesystem->native, buffer + bufferLength, block);
 		size -= block;
 		bufferLength += block;
 	}
+	// size should be 0
 	return buffer;
 }
-
 
 // will return TSMS_FILE_EMPTY_CONTENT if the file is empty
 uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS end) {
@@ -608,6 +664,7 @@ uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS en
 	TSMS_LSIZE size = end - start;
 	if (size == 0)
 		return TSMS_FILE_EMPTY_CONTENT;
+	// todo do a test
 	uint8_t *buffer = malloc(sizeof(uint8_t) * size);
 	TSMS_POS startBlockPos = start / TSMS_FILE_CONTENT_BLOCK;
 	TSMS_POS endBlockPos = end / TSMS_FILE_CONTENT_BLOCK;
@@ -620,20 +677,25 @@ uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS en
 	TSMS_SIZE startBlockSize = TSMS_FILE_CONTENT_BLOCK - (start % TSMS_FILE_CONTENT_BLOCK);
 	__internal_tsms_seek(file->filesystem->native,
 	                     file->blocks->list[startBlockPos] + (start % TSMS_FILE_CONTENT_BLOCK));
-	__internal_tsms_read(file->filesystem->native, contentBuffer, startBlockSize);
-	memcpy(buffer, contentBuffer, startBlockSize);
+	__internal_tsms_read(file->filesystem->native, buffer, startBlockSize);
 	for (TSMS_POS i = startBlockPos + 1; i < endBlockPos; i++) {
 		__internal_tsms_seek(file->filesystem->native, file->blocks->list[i]);
-		__internal_tsms_read(file->filesystem->native, contentBuffer, TSMS_FILE_CONTENT_BLOCK);
-		memcpy(buffer + (i - startBlockPos - 1) * TSMS_FILE_CONTENT_BLOCK + startBlockSize, contentBuffer,
-		       TSMS_FILE_CONTENT_BLOCK);
+		__internal_tsms_read(file->filesystem->native, buffer + startBlockSize + (i - startBlockPos - 1) * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
 	}
 	TSMS_SIZE endBlockSize = end % TSMS_FILE_CONTENT_BLOCK;
 	__internal_tsms_seek(file->filesystem->native, file->blocks->list[endBlockPos]);
-	__internal_tsms_read(file->filesystem->native, contentBuffer, endBlockSize);
-	memcpy(buffer + (endBlockPos - startBlockPos - 1) * TSMS_FILE_CONTENT_BLOCK + startBlockSize, contentBuffer,
-	       endBlockSize);
+	__internal_tsms_read(file->filesystem->native, buffer + startBlockSize + (endBlockPos - startBlockPos - 1) * TSMS_FILE_CONTENT_BLOCK, endBlockSize);
 	return buffer;
+}
+
+// used to safely free the buffer returned by TSMS_FILESYSTEM_readFile and TSMS_FILESYSTEM_readPartialFile
+TSMS_RESULT TSMS_FILESYSTEM_freeContentBuffer(uint8_t *buffer) {
+	if (buffer == TSMS_NULL)
+		return TSMS_ERROR;
+	if (buffer == TSMS_FILE_EMPTY_CONTENT)
+		return TSMS_SUCCESS;
+	free(buffer);
+	return TSMS_SUCCESS;
 }
 
 TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE size) {
@@ -654,73 +716,90 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 		return TSMS_ERROR;
 	if (size == 0)
 		return TSMS_SUCCESS;
-	// two situations:
-	// first: the pos is at the end of the block. For example, file is empty, the file size is 4096, and the pos is 4096, or the file size is 8192 and the pos is 4096.
-	// second: the pos is not at the end of the block.
-	// in situation one, no start block, only the content and the following blocks.
-	// in situation two, the start block, the content and the following blocks.
+
 	TSMS_POS startBlockPos = pos / TSMS_FILE_CONTENT_BLOCK;
-	TSMS_SIZE startBlockRestSize = (TSMS_FILE_CONTENT_BLOCK - (pos % TSMS_FILE_CONTENT_BLOCK)) % TSMS_FILE_CONTENT_BLOCK;
-	if (pos == file->size && pos % TSMS_FILE_CONTENT_BLOCK == 0)
-		startBlockRestSize = 0;
-	// in situation one, the startBlockPos may not exist (at the end of the file) but the startBlockRestSize is 0.
-	// in situation two, the startBlockPos must exist and the startBlockRestSize is not 0.
-	memcpy(contentBuffer, content, startBlockRestSize);
-	// write 0 length does not matter
+	TSMS_SIZE tempSize = TSMS_FILE_CONTENT_BLOCK - (pos % TSMS_FILE_CONTENT_BLOCK);
+	TSMS_SIZE startBlockRestSize = min (tempSize, file->size - pos);
+	// if the start block is not the end block of file, the rest size depends on the tempSize and surely less than file->size - pos
+	// if the start block is the end block of file or the start block does not exist, the rest size depends on the file->size - pos and surely less or equal to tempSize
+	TSMS_SIZE startBlockWritableSize = min((startBlockPos == file->blocks->length) ? 0 : tempSize, size);
+	// the startBlockWritableSize depends on whether the start block exists and the content size
+	// if the start block exists, min (tempSize, size) will be the startBlockWritableSize
+	// if the start block does not exist, the startBlockWritableSize will be 0
+	// only if the pos is at multiple of TSMS_FILE_CONTENT_BLOCK and the pos is at the end of file, the startBlockWritableSize will be 0, which means the start block does not exist
+	// so (startBlockWritableSize != 0) will indicate whether the start block exists
+	TSMS_SIZE startBlockExisted = startBlockWritableSize != 0;
+	// copy the start block rest size to contentBuffer2
 	if (startBlockRestSize != 0) {
 		__internal_tsms_seek(file->filesystem->native,
 		                     file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK));
 		__internal_tsms_read(file->filesystem->native, contentBuffer2, startBlockRestSize);
 	}
-	__internal_tsms_seek(file->filesystem->native, file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK));
-	__internal_tsms_write(file->filesystem->native, contentBuffer, startBlockRestSize);
+	if (startBlockWritableSize != 0) {
+		__internal_tsms_seek(file->filesystem->native,
+		                     file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK));
+		__internal_tsms_write(file->filesystem->native, content, startBlockWritableSize);
+	}
 	// middleBlockSize > 0 only if the rest size is larger than TSMS_FILE_CONTENT_BLOCK
-	TSMS_SIZE middleBlockSize = (size - startBlockRestSize) / TSMS_FILE_CONTENT_BLOCK;
+	TSMS_SIZE middleBlockSize = (size - startBlockWritableSize) / TSMS_FILE_CONTENT_BLOCK;
 	// write the middle full blocks (the size must be TSMS_FILE_CONTENT_BLOCK)
 	for (TSMS_POS i = 0; i < middleBlockSize; i++) {
 		long offset = __internal_tsms_alloc_content_block(file->filesystem);
-		// in situation one, no start block, so the insert-position is startBlockPos + i
-		// in situation two, should be start block, so the insert-position is startBlockPos + i + 1
-		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + i + (startBlockRestSize != 0));
-		memcpy(contentBuffer, content + startBlockRestSize + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
+		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + startBlockExisted + i);
 		__internal_tsms_seek(file->filesystem->native, offset);
-		__internal_tsms_write(file->filesystem->native, contentBuffer, TSMS_FILE_CONTENT_BLOCK);
+		__internal_tsms_write(file->filesystem->native, content + startBlockWritableSize + i * TSMS_FILE_CONTENT_BLOCK, TSMS_FILE_CONTENT_BLOCK);
 	}
 	// the rest: three parts:
 	// 1. the rest of the content < TSMS_FILE_CONTENT_BLOCK
-	// 2. the rest of the start block < TSMS_FILE_CONTENT_BLOCK
+	// 2. the rest of the start block <= TSMS_FILE_CONTENT_BLOCK
 	// 3. the rest of the following blocks after the start block
 	// if the 1 and 2's size is TSMS_FILE_CONTENT_BLOCK or 0, we don't need to do anything to the following blocks after the start block, so special case
 
-	TSMS_LSIZE restSize = size - startBlockRestSize - middleBlockSize * TSMS_FILE_CONTENT_BLOCK;
+	TSMS_LSIZE restSize = size - startBlockWritableSize - middleBlockSize * TSMS_FILE_CONTENT_BLOCK;
 	TSMS_LSIZE size1And2 = restSize + startBlockRestSize;
+	// if start block exists and size < tempSize, there should be blank space in the start block, which size is tempSize - size
+	// only if the startBlockRestSize is tempSize, the following blocks after the start block should exist
+	// use startBlockRestSize to fill the blank space and there should be a space with size tempSize - (tempSize - size) = size, which should never be 0
+	// so when there is a blank space, the following blocks after the start block should be moved. This is a general case
 	if ((size1And2) % TSMS_FILE_CONTENT_BLOCK != 0) {
 		// general case
 		// align the rest of the start block if possible
-		TSMS_LSIZE total = size1And2 + file->size - pos;
+		TSMS_LSIZE total = restSize + file->size - pos;
 		uint8_t * buffer = malloc(sizeof(uint8_t) * total);
-		memcpy(buffer, content + startBlockRestSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
+		memcpy(buffer, content + startBlockWritableSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
 		memcpy(buffer + restSize, contentBuffer2, startBlockRestSize);
-		TSMS_SIZE blockPos = startBlockPos + middleBlockSize + (startBlockRestSize != 0);
+		TSMS_SIZE blockPos = startBlockPos + middleBlockSize + startBlockExisted;
 		for (TSMS_POS i = blockPos; i < file->blocks->length;i++) {
 			__internal_tsms_seek(file->filesystem->native, file->blocks->list[i]);
-			__internal_tsms_read(file->filesystem->native, buffer + restSize + startBlockRestSize + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - size1And2 - (i - blockPos) * TSMS_FILE_CONTENT_BLOCK));
+			__internal_tsms_read(file->filesystem->native, buffer + size1And2 + (i - blockPos) * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - size1And2 - (i - blockPos) * TSMS_FILE_CONTENT_BLOCK));
+		}
+		TSMS_LSIZE extraSize = min(total, (startBlockExisted && size < tempSize) ? tempSize - size : 0);
+		// if start block does not exist, the extraSize will be 0
+		// if start block exists, the extraSize will be the blank space size
+		// only if size < tempSize and start block exist, the extraSize will not be 0
+		if (extraSize != 0) {
+			__internal_tsms_seek(file->filesystem->native,
+			                     file->blocks->list[startBlockPos] + (pos % TSMS_FILE_CONTENT_BLOCK) +
+			                     startBlockWritableSize);
+			__internal_tsms_write(file->filesystem->native, buffer, extraSize);
+			total -= extraSize;
 		}
 		TSMS_SIZE endBlockSize = total % TSMS_FILE_CONTENT_BLOCK == 0 ? total / TSMS_FILE_CONTENT_BLOCK : total / TSMS_FILE_CONTENT_BLOCK + 1;
 		for (TSMS_POS i = 0; i < endBlockSize; i++) {
 			if (blockPos + i == file->blocks->length) {
 				long offset = __internal_tsms_alloc_content_block(file->filesystem);
-				TSMS_LONG_LIST_insert(file->blocks, offset, blockPos + i);
+				TSMS_LONG_LIST_add(file->blocks, offset);
 			}
 			__internal_tsms_seek(file->filesystem->native, file->blocks->list[blockPos + i]);
-			__internal_tsms_write(file->filesystem->native, buffer + i * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - i * TSMS_FILE_CONTENT_BLOCK));
+			__internal_tsms_write(file->filesystem->native, buffer + extraSize + i * TSMS_FILE_CONTENT_BLOCK, min(TSMS_FILE_CONTENT_BLOCK, total - i * TSMS_FILE_CONTENT_BLOCK));
 		}
+		free(buffer);
 	} else if (size1And2 == TSMS_FILE_CONTENT_BLOCK) {
-		// in this case, size 1 and size 2 should not be 0
-		memcpy(contentBuffer, content + startBlockRestSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
+		// in this case, the rest of the start block should not be 0, so the start block exists
+		memcpy(contentBuffer, content + startBlockWritableSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
 		memcpy(contentBuffer + restSize, contentBuffer2, startBlockRestSize);
 		long offset = __internal_tsms_alloc_content_block(file->filesystem);
-		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + 1);
+		TSMS_LONG_LIST_insert(file->blocks, offset, startBlockPos + middleBlockSize + startBlockExisted); // startBlockExisted is 1
 		__internal_tsms_seek(file->filesystem->native, offset);
 		__internal_tsms_write(file->filesystem->native, contentBuffer, TSMS_FILE_CONTENT_BLOCK);
 	}
@@ -982,6 +1061,23 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 	return TSMS_SUCCESS;
 }
 
+bool TSMS_FILESYSTEM_contentEquals(pFile file1, pFile file2) {
+	if (file1 == TSMS_NULL && file2 == TSMS_NULL)
+		return true;
+	if (file1 == TSMS_NULL || file2 == TSMS_NULL)
+		return false;
+	if (TSMS_FILESYSTEM_isFolder(file1) || TSMS_FILESYSTEM_isFolder(file2))
+		return false;
+	if (file1->size != file2->size)
+		return false;
+	uint8_t *content1 = TSMS_FILESYSTEM_readFile(file1);
+	uint8_t *content2 = TSMS_FILESYSTEM_readFile(file2);
+	bool result = memcmp(content1, content2, file1->size) == 0;
+	free(content1);
+	free(content2);
+	return result;
+}
+
 pFilestream TSMS_FILE_open(pFile file) {
 	return TSMS_FILE_openWithMode(file, TSMS_FILE_MODE_READ);
 }
@@ -1018,7 +1114,7 @@ TSMS_RESULT TSMS_FILE_read(pFilestream stream, uint8_t *buffer, TSMS_LSIZE size)
 	else if (stream->pos + size > stream->file->size) {
 		uint8_t * b = TSMS_FILESYSTEM_readPartialFile(stream->file, stream->pos, stream->file->size);
 		memcpy(buffer, b, stream->file->size - stream->pos);
-		free(b);
+		TSMS_FILESYSTEM_freeContentBuffer(b);
 		for (TSMS_LSIZE i = stream->file->size - stream->pos; i < size; i++)
 			buffer[i] = 0;
 	} else {
@@ -1053,7 +1149,7 @@ TSMS_POS TSMS_FILE_tell(pFilestream stream) {
 	return stream->pos;
 }
 
-TSMS_RESULT TSMS_FILESYSTEM_close(pFilestream stream) {
+TSMS_RESULT TSMS_FILE_close(pFilestream stream) {
 	if (stream == TSMS_NULL)
 		return TSMS_ERROR;
 	free(stream);
