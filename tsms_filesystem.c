@@ -61,6 +61,10 @@ TSMS_INLINE TSMS_FILESYSTEM_PLATFORM_SENSITIVE void __internal_tsms_write(void *
 #ifdef STM32
 #else
 	size_t t = fwrite(ptr, size, 1, handle);
+	if (t != 1) {
+		printf("fwrite failed, %d\n", ferror(handle));
+		printf("errno: %d\n", errno);
+	}
 #ifdef TSMS_DEBUG
 	printf("Wrote %x bytes\n", size);
 #endif
