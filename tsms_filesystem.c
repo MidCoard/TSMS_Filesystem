@@ -326,6 +326,7 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
 				long offset = file->anchors->list[anchorPos++];
 				__internal_tsms_write(file->filesystem->native, &offset, sizeof(long));
+				__internal_tsms_seek(file->filesystem->native, offset);
 				currentSize += TSMS_FILE_UNIT;
 			}
 			TSMS_ME entry = TSMS_MAP_next(&iter);
@@ -337,10 +338,12 @@ TSMS_INLINE void __internal_tsms_save_header(pFile file) {
 	} else {
 		__internal_tsms_write(file->filesystem->native, &file->blocks->length, sizeof(TSMS_SIZE));
 		__internal_tsms_write(file->filesystem->native, &file->size, sizeof(TSMS_LSIZE));
+		currentSize += 8;
 		for (TSMS_POS i = 0; i < file->blocks->length; i++) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
 				long offset = file->anchors->list[anchorPos++];
 				__internal_tsms_write(file->filesystem->native, &offset, sizeof(long));
+				__internal_tsms_seek(file->filesystem->native, offset);
 				currentSize += TSMS_FILE_UNIT;
 			}
 			long offset = file->blocks->list[i];
@@ -371,6 +374,8 @@ TSMS_INLINE void __internal_tsms_load_file(pFile file) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
 				long offset;
 				__internal_tsms_read(file->filesystem->native, &offset, sizeof(long));
+				if (offset > TSMS_FILESYSTEM_CONTENT_OFFSET)
+					printf("Content offset error: %ld\n", offset);
 				TSMS_LONG_LIST_add(file->anchors, offset);
 				__internal_tsms_seek(file->filesystem->native, offset);
 				currentSize += TSMS_FILE_UNIT;
@@ -387,10 +392,13 @@ TSMS_INLINE void __internal_tsms_load_file(pFile file) {
 		file->files = TSMS_NULL;
 		file->blocks = TSMS_LONG_LIST_create(10);
 		__internal_tsms_read(file->filesystem->native, &file->size, sizeof(TSMS_LSIZE));
+		currentSize += 8;
 		for (TSMS_POS i = 0; i < size; i++) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
 				long offset;
 				__internal_tsms_read(file->filesystem->native, &offset, sizeof(long));
+				if (offset > TSMS_FILESYSTEM_CONTENT_OFFSET)
+					printf("Content offset error: %ld\n", offset);
 				TSMS_LONG_LIST_add(file->anchors, offset);
 				__internal_tsms_seek(file->filesystem->native, offset);
 				currentSize += TSMS_FILE_UNIT;
