@@ -46,7 +46,7 @@ typedef tFilestream* pFilestream;
 #include "tsms_util.h"
 #include "tsms_long_set.h"
 #include "tsms_deque.h"
-#include <unistd.h>
+#include "tsms_map.h"
 
 struct TSMS_FILE_HANDLER {
 	pFilesystem filesystem;

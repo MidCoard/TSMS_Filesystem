@@ -1,5 +1,7 @@
 #include <errno.h>
+#include "unistd.h"
 #include "tsms_filesystem.h"
+#include "tsms_function_def.h"
 
 const uint32_t TSMS_FILE_MAGIC = 0x3def11c1;
 
@@ -367,8 +369,8 @@ TSMS_INLINE void __internal_tsms_load_file(pFile file) {
 	__internal_tsms_seek(file->filesystem->native, file->offset + currentSize - 4);
 	__internal_tsms_read(file->filesystem->native, &size, sizeof(TSMS_SIZE));
 	if (TSMS_FILESYSTEM_isFolder(file)) {
-		file->files = TSMS_MAP_create(255, (TSMS_MAP_HASH_FUNCTION) TSMS_STRING_hash,
-		                              (TSMS_MAP_COMPARE_FUNCTION) TSMS_STRING_compare);
+		file->files = TSMS_MAP_create(255, (TSMS_HASH_FUNCTION) TSMS_STRING_hash,
+		                              (TSMS_COMPARE_FUNCTION) TSMS_STRING_compare);
 		file->blocks = TSMS_NULL;
 		for (TSMS_POS i = 0; i < size; i++) {
 			if (((currentSize + TSMS_FILE_UNIT) % TSMS_FILE_HEADER_BLOCK) == 0) {
@@ -451,7 +453,7 @@ TSMS_INLINE pFile __internal_tsms_read_file(pFilesystem filesystem, long offset,
 	}
 
 	filenameBuffer[length] = 0;
-	file->name = TSMS_STRING_createAndInit(filenameBuffer);
+	file->name = TSMS_STRING_createWithString(filenameBuffer);
 	for (TSMS_POS i = 0; i < 4; i++)
 		__internal_tsms_read(filesystem->native, file->options + i, sizeof(TSMS_FILE_OPTION));
 	TSMS_SIZE align = __internal_tsms_calc_align_bytes(file);
@@ -482,7 +484,7 @@ __internal_tsms_create_file(pFilesystem filesystem, long offset, pString name, T
 	file->level = parent == TSMS_NULL ? 0 : parent->level + 1;
 	file->loaded = true;
 
-	file->name = TSMS_STRING_createAndInit(name->cStr);
+	file->name = TSMS_STRING_createWithString(name->cStr);
 	if (parent != TSMS_NULL)
 		TSMS_MAP_put(parent->files, file->name, file);
 	if (options != TSMS_NULL)
@@ -493,8 +495,8 @@ __internal_tsms_create_file(pFilesystem filesystem, long offset, pString name, T
 	for (int i = 1; i < 4; i++)
 		file->options[i] = 0;
 	if (type == TSMS_FILE_TYPE_FOLDER) {
-		file->files = TSMS_MAP_create(255, (TSMS_MAP_HASH_FUNCTION) TSMS_STRING_hash,
-		                              (TSMS_MAP_COMPARE_FUNCTION) TSMS_STRING_compare);
+		file->files = TSMS_MAP_create(255, (TSMS_HASH_FUNCTION) TSMS_STRING_hash,
+		                              (TSMS_COMPARE_FUNCTION) TSMS_STRING_compare);
 		file->blocks = TSMS_NULL;
 	} else {
 		file->files = TSMS_NULL;
@@ -526,7 +528,7 @@ TSMS_RESULT TSMS_FILESYSTEM_setDefaultFilesystem(pFilesystem filesystem) {
 
 pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(char split) {
 	pFilesystem filesystem = malloc(sizeof(tFilesystem));
-	filesystem->split = TSMS_STRING_createAndInitChar(split);
+	filesystem->split = TSMS_STRING_createWithChar(split);
 	if (filesystem->split == TSMS_NULL) {
 		TSMS_FILESYSTEM_release(filesystem);
 		return TSMS_NULL;
@@ -1021,14 +1023,14 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 	if (TSMS_FILESYSTEM_isFolder(file)) {
 		pFile newFile = TSMS_FILESYSTEM_getFile(dir, file->name);
 		int cur = 1;
-		pString temp = TSMS_STRING_createAndInit(file->name->cStr);
+		pString temp = TSMS_STRING_createWithString(file->name->cStr);
 		while (newFile != TSMS_NULL) {
 			TSMS_STRING_release(temp);
 			if (cur > 1000)
 				return TSMS_FAIL;
-			temp = TSMS_STRING_createAndInit(file->name->cStr);
+			temp = TSMS_STRING_createWithString(file->name->cStr);
 			TSMS_STRING_append(temp, TSMS_STRING_SPACE);
-			pString num = TSMS_STRING_createAndInitInt(cur);
+			pString num = TSMS_STRING_createWithInt(cur);
 			TSMS_STRING_append(temp, num);
 			TSMS_STRING_release(num);
 			newFile = TSMS_FILESYSTEM_getFile(dir, temp);
@@ -1047,14 +1049,14 @@ TSMS_RESULT TSMS_FILESYSTEM_copy(pFile file, pFile dir) {
 	} else {
 		pFile newFile = TSMS_FILESYSTEM_getFile(dir, file->name);
 		int cur = 1;
-		pString temp = TSMS_STRING_createAndInit(file->name->cStr);
+		pString temp = TSMS_STRING_createWithString(file->name->cStr);
 		while (newFile != TSMS_NULL) {
 			TSMS_STRING_release(temp);
 			if (cur > 1000)
 				return TSMS_FAIL;
-			temp = TSMS_STRING_createAndInit(file->name->cStr);
+			temp = TSMS_STRING_createWithString(file->name->cStr);
 			TSMS_STRING_append(temp, TSMS_STRING_SPACE);
-			pString num = TSMS_STRING_createAndInitInt(cur);
+			pString num = TSMS_STRING_createWithInt(cur);
 			TSMS_STRING_append(temp, num);
 			TSMS_STRING_release(num);
 			newFile = TSMS_FILESYSTEM_getFile(dir, temp);
@@ -1098,7 +1100,7 @@ pFilestream TSMS_FILE_openWithMode(pFile file, TSMS_FILE_MODE mode) {
 	pFilestream stream = (pFilestream) malloc(sizeof(tFilestream));
 	if (stream == TSMS_NULL) {
 		tString temp = TSMS_STRING_temp("malloc failed for stream");
-		TSMS_ERR_report(TSMS_ERR_MALLOC_FAILED, &temp);
+		TSMS_ERR_report(TSMS_ERROR_TYPE_MALLOC_FAILED, &temp);
 		return TSMS_NULL;
 	}
 	stream->file = file;
