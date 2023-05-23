@@ -1,7 +1,6 @@
 #include <errno.h>
 #include "unistd.h"
 #include "tsms_filesystem.h"
-#include "tsms_function_def.h"
 
 const uint32_t TSMS_FILE_MAGIC = 0x3def11c1;
 
@@ -28,7 +27,9 @@ struct __tsms_internal_pair {
 };
 
 TSMS_INLINE struct __tsms_internal_pair *__internal_tsms_create_pair(TSMS_POS offset, TSMS_LSIZE count) {
-	struct __tsms_internal_pair *pair = malloc(sizeof(struct __tsms_internal_pair));
+	struct __tsms_internal_pair *pair = TSMS_malloc(sizeof(struct __tsms_internal_pair));
+	if (pair == TSMS_NULL)
+		return TSMS_NULL;
 	pair->offset = offset;
 	pair->count = count;
 	return pair;
@@ -416,7 +417,7 @@ TSMS_INLINE void __internal_tsms_load_file(pFile file) {
 }
 
 TSMS_INLINE pFile __internal_tsms_read_file(pFilesystem filesystem, long offset, pFile parent, bool deep) {
-	pFile file = malloc(sizeof(tFile));
+	pFile file = TSMS_malloc(sizeof(tFile));
 	if (file == TSMS_NULL)
 		return TSMS_NULL;
 
@@ -471,7 +472,7 @@ TSMS_INLINE pFile __internal_tsms_read_file(pFilesystem filesystem, long offset,
 TSMS_INLINE pFile
 __internal_tsms_create_file(pFilesystem filesystem, long offset, pString name, TSMS_FILE_TYPE type, pFile parent,
                             const uint8_t *options) {
-	pFile file = malloc(sizeof(tFile));
+	pFile file = TSMS_malloc(sizeof(tFile));
 	if (file == TSMS_NULL)
 		return TSMS_NULL;
 	file->dirty = false;
@@ -527,7 +528,9 @@ TSMS_RESULT TSMS_FILESYSTEM_setDefaultFilesystem(pFilesystem filesystem) {
 }
 
 pFilesystem TSMS_FILESYSTEM_PLATFORM_SENSITIVE TSMS_FILESYSTEM_createFilesystem(char split) {
-	pFilesystem filesystem = malloc(sizeof(tFilesystem));
+	pFilesystem filesystem = TSMS_malloc(sizeof(tFilesystem));
+	if (filesystem == TSMS_NULL)
+		return TSMS_NULL;
 	filesystem->split = TSMS_STRING_createWithChar(split);
 	if (filesystem->split == TSMS_NULL) {
 		TSMS_FILESYSTEM_release(filesystem);
@@ -652,7 +655,7 @@ uint8_t *TSMS_FILESYSTEM_readFile(pFile file) {
 	TSMS_LSIZE size = file->size;
 	if (size == 0)
 		return TSMS_FILE_EMPTY_CONTENT;
-	uint8_t *buffer = malloc(sizeof(uint8_t) * size);
+	uint8_t *buffer = TSMS_malloc(sizeof(uint8_t) * size);
 	if (buffer == TSMS_NULL)
 		return TSMS_NULL;
 	TSMS_LSIZE bufferLength = 0;
@@ -678,8 +681,9 @@ uint8_t *TSMS_FILESYSTEM_readPartialFile(pFile file, TSMS_POS start, TSMS_POS en
 	TSMS_LSIZE size = end - start;
 	if (size == 0)
 		return TSMS_FILE_EMPTY_CONTENT;
-	// todo do a test
-	uint8_t *buffer = malloc(sizeof(uint8_t) * size);
+	uint8_t *buffer = TSMS_malloc(sizeof(uint8_t) * size);
+	if (buffer == TSMS_NULL)
+		return TSMS_NULL;
 	TSMS_POS startBlockPos = start / TSMS_FILE_CONTENT_BLOCK;
 	TSMS_POS endBlockPos = end / TSMS_FILE_CONTENT_BLOCK;
 	if (startBlockPos == endBlockPos) {
@@ -779,7 +783,9 @@ TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_
 		// general case
 		// align the rest of the start block if possible
 		TSMS_LSIZE total = restSize + file->size - pos;
-		uint8_t * buffer = malloc(sizeof(uint8_t) * total);
+		uint8_t * buffer = TSMS_malloc(sizeof(uint8_t) * total);
+		if (buffer == TSMS_NULL)
+			return TSMS_ERROR;
 		memcpy(buffer, content + startBlockWritableSize + middleBlockSize * TSMS_FILE_CONTENT_BLOCK, restSize);
 		memcpy(buffer + restSize, contentBuffer2, startBlockRestSize);
 		TSMS_SIZE blockPos = startBlockPos + middleBlockSize + startBlockExisted;
@@ -1097,12 +1103,9 @@ pFilestream TSMS_FILE_open(pFile file) {
 }
 
 pFilestream TSMS_FILE_openWithMode(pFile file, TSMS_FILE_MODE mode) {
-	pFilestream stream = (pFilestream) malloc(sizeof(tFilestream));
-	if (stream == TSMS_NULL) {
-		tString temp = TSMS_STRING_temp("malloc failed for stream");
-		TSMS_ERR_report(TSMS_ERROR_TYPE_MALLOC_FAILED, &temp);
+	pFilestream stream = (pFilestream) TSMS_malloc(sizeof(tFilestream));
+	if (stream == TSMS_NULL)
 		return TSMS_NULL;
-	}
 	stream->file = file;
 	stream->mode = mode;
 	stream->pos = 0;
@@ -1146,7 +1149,9 @@ TSMS_RESULT TSMS_FILE_write(pFilestream stream, uint8_t *buffer, TSMS_LSIZE size
 	if (stream->mode == TSMS_FILE_MODE_READ)
 		return TSMS_ERROR;
 	if (stream->pos > stream->file->size) {
-		uint8_t *b = malloc(sizeof(uint8_t) * (stream->pos - stream->file->size));
+		uint8_t *b = TSMS_malloc(sizeof(uint8_t) * (stream->pos - stream->file->size));
+		if (b == TSMS_NULL)
+			return TSMS_ERROR;
 		for (TSMS_LSIZE i = 0; i < stream->pos - stream->file->size; i++)
 			b[i] = 0;
 		TSMS_FILESYSTEM_insertFile(stream->file, b, stream->file->size, stream->pos - stream->file->size);
