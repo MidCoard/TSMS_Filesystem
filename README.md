@@ -70,7 +70,7 @@ Add the freed block to the stored information.
 
 As we delete the information of the freed block if the count of the stored information exceeds 60, we need to find out leading 0xffffffffffffffff header/content blocks and fragment them if necessary.
 
-Currently, this work has not been done yet.
+Currently, this work has not been done yet because file content-block cannot be distinguished from the freed block.
 
 ### Details
 
@@ -155,4 +155,12 @@ You can use this filesystem on an existed OS.
 - [X] Add more efficient allocation.
 - [X] Add more efficient freeing.
 - [ ] Filestream.
+
+## Proposals
+
+### File Cotent-Block One Byte Freed Information
+
+Because we can not distinguish the freed content-block from the data block, we can use one byte of the content-block to store the freed information.
+So that we can defragment the files.
+
 

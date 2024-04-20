@@ -255,7 +255,7 @@ TSMS_INLINE long __internal_tsms_alloc_header_block(pFilesystem filesystem) {
 	return offset;
 }
 
-// todo platform special, check the limitation of the disk size
+// todo platform special, check the limitation of the disk size, in other words, this method may return -1 as it is not possible to allocate a new block
 TSMS_INLINE long __internal_tsms_alloc_content_block(pFilesystem filesystem) {
 	if (!TSMS_DEQUE_empty(filesystem->contentDeque)) {
 		struct __tsms_internal_pair *pair = TSMS_DEQUE_peekLast(filesystem->contentDeque);
@@ -724,7 +724,9 @@ TSMS_RESULT TSMS_FILESYSTEM_writeFile(pFile file, uint8_t *content, TSMS_LSIZE s
 	return TSMS_FILESYSTEM_insertFile(file, content, 0, size);
 }
 
-
+// todo we do not check __internal_tsms_alloc_content_block may return -1, which means the disk is full
+// todo there is no rollback if some error occurs in the middle of the process, which may cause the file system to be corrupted
+// todo File Cotent-Block One Byte Freed Information
 TSMS_RESULT TSMS_FILESYSTEM_insertFile(pFile file, const uint8_t *content, TSMS_POS pos, TSMS_LSIZE size) {
 	if (file == TSMS_NULL || content == TSMS_NULL)
 		return TSMS_ERROR;
