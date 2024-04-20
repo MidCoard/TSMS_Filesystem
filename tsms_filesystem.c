@@ -203,7 +203,7 @@ TSMS_INLINE void __internal_tsms_mark_free_header_block(pFilesystem fs, long off
 TSMS_INLINE void __internal_tsms_mark_free_content_block(pFilesystem fs, long offset) {
 	__internal_tsms_seek(fs->native, offset);
 	uint8_t t = 0xff;
-	for (TSMS_POS i = 0; i < TSMS_FILE_CONTENT_BLOCK; i++)
+	for (TSMS_POS i = 0; i < TSMS_FILE_CONTENT_BLOCK; i++) // todo may should only delete first 8 bytes or just ignore
 		__internal_tsms_write(fs->native, &t, 1);
 	__internal_tsms_dealloc_content_block(fs, offset);
 }

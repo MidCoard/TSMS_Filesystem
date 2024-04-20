@@ -30,7 +30,7 @@ For the file, the following information is stored(we consider this part of the h
 
 For the folder, the following information is stored(we consider this part of the header as the content-definition-block):
 
-- the folder blocks (8 bytes each)
+- the file/folder blocks (8 bytes each)
 
 The max size of the name makes sure that the definition-block size is no more than 272 bytes.
 We define the size of the single header block as 512 bytes to make sure we can store the whole definition-block in the first header block.
@@ -57,7 +57,12 @@ If not, we simply align the last block of the file/folder to 512/4096 bytes and 
 
 ### File/Folder Freeing
 
-Write the first 8 bytes of each block to 0xff to mark it freed as we may discard the information.(So the offset of 0xffffffffffffffff in block position is reserved)
+For definition-block and content-definition-block, write the first 8 bytes of each block to 0xff to mark it freed as we may discard the information.(So the offset of 0xffffffffffffffff in block position is reserved)
+
+For content-block, no need to mark the freed block as we can simply ignore it.(You can still write the whole block to 0xff to mark it freed if you want to.)
+Problem here: when in defragmentation, there is no way to find out the freed content-blocks if we do not mark them.
+Problem upgraded: even if we mark the freed content-blocks, there may be data stored like all 0xff, so we can not distinguish the freed block from the data block.
+Possible Solution: use one byte of the content-block to store the freed information, if the block is freed, the first byte is 0xff, otherwise 0x00.
 
 Add the freed block to the stored information.
 
